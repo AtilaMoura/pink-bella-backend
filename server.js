@@ -5,6 +5,7 @@ const cors = require('cors');
 const path = require('path'); 
 const db = require('./database');
 const produtosRoutes = require('./routes/produtosRoutes'); // Importa as rotas de produtos
+const clientesRoutes = require('./routes/clientesRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,7 @@ app.get('/', (req, res) => {
     res.send('Backend Pink Bella funcionando! Agora sim ');
 });
 app.use('/produtos', produtosRoutes);
+app.use('/clientes', clientesRoutes);
 
 // Inicia o servidor
 app.listen(PORT, () => {
