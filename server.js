@@ -7,6 +7,7 @@ const db = require('./database');
 const produtosRoutes = require('./routes/produtosRoutes'); // Importa as rotas de produtos
 const clientesRoutes = require('./routes/clientesRoutes');
 const comprasRoutes = require('./routes/comprasRoutes');
+const freteRoutes = require('./routes/freteRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,6 +25,7 @@ app.get('/', (req, res) => {
 app.use('/produtos', produtosRoutes);
 app.use('/clientes', clientesRoutes);
 app.use('/compras', comprasRoutes);
+app.use('/frete', freteRoutes); 
 
 // Inicia o servidor
 app.listen(PORT, () => {
