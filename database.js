@@ -20,12 +20,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
             imagem TEXT
         )`);
         db.run(`CREATE TABLE IF NOT EXISTS clientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            cpf_cnpj TEXT UNIQUE,
-            cep TEXT,
-            endereco TEXT
-        )`);
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                cpf_cnpj TEXT UNIQUE,
+                cep TEXT,
+                logradouro TEXT,
+                bairro TEXT,
+                cidade TEXT,
+                estado TEXT,
+                criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`);
         db.run(`CREATE TABLE IF NOT EXISTS compras (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             cliente_id INTEGER,

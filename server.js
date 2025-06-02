@@ -8,6 +8,7 @@ const produtosRoutes = require('./routes/produtosRoutes'); // Importa as rotas d
 const clientesRoutes = require('./routes/clientesRoutes');
 const comprasRoutes = require('./routes/comprasRoutes');
 const freteRoutes = require('./routes/freteRoutes');
+const addressRoutes = require('./routes/addressRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +27,7 @@ app.use('/produtos', produtosRoutes);
 app.use('/clientes', clientesRoutes);
 app.use('/compras', comprasRoutes);
 app.use('/frete', freteRoutes); 
+app.use('/endereco', addressRoutes);
 
 // Inicia o servidor
 app.listen(PORT, () => {

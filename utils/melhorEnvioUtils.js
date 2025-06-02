@@ -75,29 +75,35 @@ async function calcularFrete(cepDestino, itensProdutos) {
     };
 
     try {
-        const response = await axios.post(`${MELHOR_ENVIO_URL}/me/shipment/calculate`, dadosFrete, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
-                'User-Agent': `PinkBellaBackend (${SEU_EMAIL_MELHOR_ENVIO})`
-            }
-        });
-
-        if (!response.data || response.data.length === 0 || response.data[0].error) {
-            console.error('Erro retornado pelo Melhor Envio:', response.data[0]?.error || 'Resposta vazia');
-            throw new Error('Não foi possível calcular o frete com o Melhor Envio.');
+    const response = await axios.post(`${MELHOR_ENVIO_URL}/me/shipment/calculate`, dadosFrete, {
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
+            'User-Agent': `PinkBellaBackend (${SEU_EMAIL_MELHOR_ENVIO})`
         }
+    });
 
-        return response.data.filter(service => !service.error);
+    // NOVO CÓDIGO AQUI: Filtra apenas as opções de frete que NÃO têm erro
+    const opcoesValidas = response.data.filter(service => !service.error);
+
+    // Se, após filtrar, não houver NENHUMA opção de frete válida, então dispara um erro.
+    if (opcoesValidas.length === 0) {
+        console.error('Melhor Envio: Nenhuma opção de frete válida encontrada para o trecho/dimensões.');
+        // Opcional: console.error('Resposta completa do Melhor Envio para depuração:', JSON.stringify(response.data, null, 2));
+        throw new Error('Nenhuma opção de frete disponível para o trecho ou dimensões informadas.');
+    }
+
+    // Retorna apenas as opções válidas
+    return opcoesValidas;
 
     } catch (error) {
-        console.error('Erro ao chamar a API do Melhor Envio:', error.message);
-        if (error.response) {
-            console.error('Detalhes do erro Melhor Envio:', error.response.data);
-            throw new Error(`Erro na integração com Melhor Envio: ${error.response.data.message || JSON.stringify(error.response.data)}`);
-        }
-        throw new Error('Erro desconhecido ao calcular frete com Melhor Envio.');
+    console.error('Erro ao chamar a API do Melhor Envio:', error.message);
+    if (error.response) {
+        console.error('Detalhes do erro Melhor Envio:', error.response.data);
+        throw new Error(`Erro na integração com Melhor Envio: ${error.response.data.message || JSON.stringify(error.response.data)}`);
+    }
+    throw new Error('Erro desconhecido ao calcular frete com Melhor Envio.');
     }
 }
 

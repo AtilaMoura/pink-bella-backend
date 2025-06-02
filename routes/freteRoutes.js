@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { calcularFrete } = require('../utils/melhorEnvioUtils'); // Importa a função de cálculo de frete
 const db = require('../database'); // Importa a conexão com o banco de dados para buscar detalhes do produto
+const { lookupAddressByCep } = require('../utils/cepUtils'); 
 
 // POST /frete/calcular - Calcula o frete para um determinado CEP e uma lista de IDs de produtos
 // Endpoint: http://localhost:3000/frete/calcular
@@ -23,6 +24,12 @@ router.post('/calcular', async (req, res) => {
     let itensProdutosParaFrete = []; // Esta será a lista com peso, altura, etc., dos produtos
 
     try {
+         const dadosEnderecoDestino = await lookupAddressByCep(cepDestino);
+        if (!dadosEnderecoDestino) {
+            // Se o CEP for inválido ou não encontrado, retorna um erro
+            return res.status(400).json({ error: 'CEP de destino inválido ou não encontrado. Por favor, verifique o CEP.' });
+        }
+
         // Para cada item recebido, buscamos os detalhes completos do produto no DB
         for (const item of itens) {
             if (typeof item.produto_id !== 'number' || typeof item.quantidade !== 'number' || item.quantidade <= 0) {
@@ -66,7 +73,10 @@ router.post('/calcular', async (req, res) => {
             })
             .sort((a, b) => a.preco_frete - b.preco_frete);
 
-        res.json(opcoesFreteFormatadas);
+        res.json({
+            endereco_destino: dadosEnderecoDestino, // Objeto com logradouro, bairro, cidade, estado, cep
+            opcoes_frete: opcoesFreteFormatadas
+        });
 
     } catch (error) {
         console.error('Erro na rota /frete/calcular:', error.message);
