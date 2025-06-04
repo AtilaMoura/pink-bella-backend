@@ -37,7 +37,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     altura REAL,
                     largura REAL,
                     comprimento REAL,
-                    quantidade_estoque INTEGER NOT NULL, -- Corrigido de 'estoque' para 'quantidade_estoque'
+                    estoque INTEGER NOT NULL,
                     imagem TEXT
                 )
             `, (err) => {

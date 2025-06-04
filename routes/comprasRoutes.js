@@ -3,17 +3,127 @@ const router = express.Router();
 const db = require('../database');
 const { calcularFrete } = require('../utils/melhorEnvioUtils'); // Para calcular o frete
 
-// Rota para registrar uma nova compra
-// Endpoint: POST /compras
+async function getFormattedCompraDetails(compraId) {
+    // 1. Buscar detalhes da compra, cliente e endereço de entrega
+    const compra = await new Promise((resolve, reject) => {
+        db.get(
+            `SELECT
+                c.id AS compra_id,
+                c.data_compra,
+                c.valor_total,
+                c.status_compra,
+                c.valor_frete,
+                c.transportadora,
+                c.servico_frete,
+                c.prazo_frete_dias,
+                c.codigo_rastreio,
+                cl.id AS cliente_id,
+                cl.nome AS cliente_nome,
+                cl.email AS cliente_email,
+                cl.telefone AS cliente_telefone,
+                e.id AS endereco_id,
+                e.cep AS endereco_cep,
+                e.logradouro AS endereco_logradouro,
+                e.numero AS endereco_numero,
+                e.complemento AS endereco_complemento,
+                e.bairro AS endereco_bairro,
+                e.cidade AS endereco_cidade,
+                e.estado AS endereco_estado,
+                e.referencia AS endereco_referencia
+            FROM compras c
+            JOIN clientes cl ON c.cliente_id = cl.id
+            JOIN enderecos e ON c.endereco_entrega_id = e.id
+            WHERE c.id = ?`,
+            [compraId],
+            (err, row) => {
+                if (err) return reject(err);
+                resolve(row);
+            }
+        );
+    });
+
+    if (!compra) {
+        return null; // Retorna null se a compra não for encontrada
+    }
+
+    // 2. Buscar os itens_compra associados a esta compra
+    const itensCompra = await new Promise((resolve, reject) => {
+        db.all(
+            `SELECT
+                ic.id AS item_id,
+                ic.quantidade,
+                ic.preco_unitario_no_momento_da_compra,
+                p.id AS produto_id,
+                p.nome AS produto_nome,
+                p.preco AS produto_preco_atual,
+                p.imagem AS produto_imagem
+            FROM itens_compra ic
+            JOIN produtos p ON ic.produto_id = p.id
+            WHERE ic.compra_id = ?`,
+            [compraId],
+            (err, rows) => {
+                if (err) return reject(err);
+                resolve(rows);
+            }
+        );
+    });
+
+    // 3. Formatar a resposta final
+    const compraFormatada = {
+        id: compra.compra_id,
+        data_compra: compra.data_compra,
+        valor_total: compra.valor_total,
+        status_compra: compra.status_compra,
+        codigo_rastreio: compra.codigo_rastreio,
+        frete: {
+            valor: compra.valor_frete,
+            transportadora: compra.transportadora,
+            servico: compra.servico_frete,
+            prazo_dias_uteis: compra.prazo_frete_dias
+        },
+        cliente: {
+            id: compra.cliente_id,
+            nome: compra.cliente_nome,
+            email: compra.cliente_email,
+            telefone: compra.cliente_telefone
+        },
+        endereco_entrega: {
+            id: compra.endereco_id,
+            cep: compra.endereco_cep,
+            logradouro: compra.endereco_logradouro,
+            numero: compra.endereco_numero,
+            complemento: compra.endereco_complemento,
+            bairro: compra.endereco_bairro,
+            cidade: compra.cidade,
+            estado: compra.estado,
+            referencia: compra.endereco_referencia
+        },
+        itens: itensCompra.map(item => ({
+            id: item.item_id,
+            produto: {
+                id: item.produto_id,
+                nome: item.produto_nome,
+                preco_atual_catalogo: item.produto_preco_atual,
+                imagem: item.produto_imagem
+            },
+            quantidade: item.quantidade,
+            preco_unitario_na_compra: item.preco_unitario_no_momento_da_compra,
+            subtotal_item: item.quantidade * item.preco_unitario_no_momento_da_compra
+        }))
+    };
+
+    return compraFormatada;
+}
+
 router.post('/', async (req, res) => {
-    const { cliente_id, cep_destino, itens } = req.body;
+    // Removido 'frete_selecionado' do destructuring, pois será calculado no backend
+    const { cliente_id, endereco_entrega_id, itens } = req.body;
 
     // --- 1. Validação dos Dados de Entrada ---
     if (!cliente_id || !itens || !Array.isArray(itens) || itens.length === 0) {
         return res.status(400).json({ error: 'ID do cliente e uma lista de itens são obrigatórios.' });
     }
 
-    // Validar cada item
     for (const item of itens) {
         if (typeof item.produto_id !== 'number' || typeof item.quantidade !== 'number' || item.quantidade <= 0) {
             return res.status(400).json({ error: 'Cada item deve ter produto_id e uma quantidade válida.' });
@@ -21,13 +131,14 @@ router.post('/', async (req, res) => {
     }
 
     let cliente;
+    let enderecoEntrega;
+    let quantidadeTotalDeItens = 0;
     let produtosCompradosDetalhes = [];
-    let quantidadeTotalDeItens = 0; // Inicializa a quantidade total de itens aqui
 
     try {
         // --- 2. Buscar Informações do Cliente ---
         cliente = await new Promise((resolve, reject) => {
-            db.get('SELECT id, cep, logradouro, bairro, cidade, estado FROM clientes WHERE id = ?', [cliente_id], (err, row) => {
+            db.get('SELECT id, endereco_principal_id FROM clientes WHERE id = ?', [cliente_id], (err, row) => {
                 if (err) return reject(err);
                 resolve(row);
             });
@@ -37,24 +148,40 @@ router.post('/', async (req, res) => {
             return res.status(404).json({ error: 'Cliente não encontrado.' });
         }
 
-        const cepParaFrete = cep_destino || cliente.cep;
-        if (!cepParaFrete) {
-             return res.status(400).json({ error: 'CEP de destino não fornecido e não encontrado no cadastro do cliente.' });
+        // --- 3. Determinar e Buscar Detalhes do Endereço de Entrega ---
+        let idDoEnderecoParaEntrega = endereco_entrega_id;
+
+        if (!idDoEnderecoParaEntrega) {
+            if (!cliente.endereco_principal_id) {
+                return res.status(400).json({ error: 'Nenhum endereço de entrega fornecido e o cliente não possui um endereço principal cadastrado.' });
+            }
+            idDoEnderecoParaEntrega = cliente.endereco_principal_id;
         }
 
-        // --- 3. Buscar Detalhes dos Produtos e Verificar Estoque ---
+        enderecoEntrega = await new Promise((resolve, reject) => {
+            db.get('SELECT id, cep, logradouro, numero, bairro, cidade, estado FROM enderecos WHERE id = ? AND cliente_id = ?',
+                   [idDoEnderecoParaEntrega, cliente_id],
+                   (err, row) => {
+                       if (err) return reject(err);
+                       resolve(row);
+                   });
+        });
+
+        if (!enderecoEntrega) {
+            return res.status(404).json({ error: `Endereço de entrega (ID ${idDoEnderecoParaEntrega}) não encontrado ou não pertence a este cliente.` });
+        }
+
+        // --- 4. Buscar Detalhes dos Produtos e Verificar Estoque ---
         const produtosPromises = itens.map(item => {
             return new Promise((resolve, reject) => {
-                // Ajustado para 'quantidade_estoque' (como definimos na sua tabela produtos)
                 db.get('SELECT id, nome, preco, estoque FROM produtos WHERE id = ?', [item.produto_id], (err, row) => {
                     if (err) return reject(err);
                     if (!row) {
                         return reject(new Error(`Produto com ID ${item.produto_id} não encontrado.`));
                     }
-                    if (row.quantidade_estoque < item.quantidade) { // Usando quantidade_estoque
+                    if (row.quantidade_estoque < item.quantidade) {
                         return reject(new Error(`Estoque insuficiente para o produto: ${row.nome}. Disponível: ${row.quantidade_estoque}, Solicitado: ${item.quantidade}.`));
                     }
-                    // Adiciona a quantidade comprada ao total para o cálculo do frete
                     quantidadeTotalDeItens += item.quantidade;
                     resolve({ ...row, quantidade_comprada: item.quantidade });
                 });
@@ -63,14 +190,14 @@ router.post('/', async (req, res) => {
 
         produtosCompradosDetalhes = await Promise.all(produtosPromises);
 
-        // --- 4. Calcular o Frete ---
-        // Agora, chamamos calcularFrete passando a quantidadeTotalDeItens diretamente
-        const opcoesFrete = await calcularFrete(cepParaFrete, quantidadeTotalDeItens);
+        // --- 5. Calcular e Selecionar o Frete Mais Barato ---
+        const opcoesFrete = await calcularFrete(enderecoEntrega.cep, quantidadeTotalDeItens);
 
         if (!opcoesFrete || opcoesFrete.length === 0) {
             return res.status(400).json({ error: 'Não foi possível calcular o frete para este destino com os produtos selecionados.' });
         }
 
+        // Automaticamente seleciona a opção mais barata
         const freteEscolhido = opcoesFrete.sort((a, b) => a.price - b.price)[0];
 
         if (!freteEscolhido) {
@@ -81,44 +208,147 @@ router.post('/', async (req, res) => {
         let valorTotalProdutos = produtosCompradosDetalhes.reduce((acc, prod) => acc + (prod.preco * prod.quantidade_comprada), 0);
         let valorTotalCompra = valorTotalProdutos + parseFloat(freteEscolhido.price);
 
+        // --- 6. Iniciar uma Transação no DB (Salvar Compra, Itens, Baixa Estoque) ---
+        db.serialize(() => {
+            db.run('BEGIN TRANSACTION;', async function(err) {
+                if (err) {
+                    console.error('Erro ao iniciar transação de compra:', err.message);
+                    return res.status(500).json({ error: 'Erro interno ao iniciar a transação de compra.' });
+                }
 
-        // --- PONTOS SEGUINTES (A SEREM IMPLEMENTADOS) ---
-        // 5. Iniciar uma transação no DB
-        // 6. Salvar a compra na tabela 'compras'
-        // 7. Salvar cada item na tabela 'itens_compra'
-        // 8. Dar baixa no estoque dos produtos
-        // 9. Finalizar a transação
+                try {
+                    // --- 7. Salvar a compra na tabela 'compras' ---
+                    const resultCompra = await new Promise((resolve, reject) => {
+                        db.run(
+                            `INSERT INTO compras (
+                                cliente_id,
+                                endereco_entrega_id,
+                                data_compra,
+                                valor_total,
+                                status_compra,
+                                valor_frete,
+                                transportadora,
+                                servico_frete,
+                                prazo_frete_dias
+                            ) VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?)`,
+                            [
+                                cliente_id,
+                                enderecoEntrega.id,
+                                valorTotalCompra,
+                                'Pendente',
+                                parseFloat(freteEscolhido.price),
+                                freteEscolhido.company.name,
+                                freteEscolhido.name,
+                                parseInt(freteEscolhido.delivery_time)
+                            ],
+                            function(err) {
+                                if (err) return reject(err);
+                                resolve(this.lastID);
+                            }
+                        );
+                    });
 
-        res.status(200).json({
-            message: 'Dados validados, produtos e frete calculados com sucesso!',
-            cliente: cliente,
-            produtos_comprados_detalhes: produtosCompradosDetalhes.map(p => ({
-                id: p.id,
-                nome: p.nome,
-                preco: p.preco,
-                quantidade_comprada: p.quantidade_comprada
-            })),
-            frete_calculado: {
-                transportadora: freteEscolhido.company.name,
-                servico: freteEscolhido.name,
-                preco: parseFloat(freteEscolhido.price),
-                prazo_dias_uteis: parseInt(freteEscolhido.delivery_time)
-            },
-            valor_total_produtos: valorTotalProdutos,
-            valor_total_compra: valorTotalCompra,
-            cep_utilizado_para_frete: cepParaFrete
+                    const compraId = resultCompra;
+                    if (!compraId) {
+                        throw new Error('Não foi possível obter o ID da compra inserida.');
+                    }
+
+                    // --- 8. Salvar cada item na tabela 'itens_compra' e Dar baixa no estoque ---
+                    for (const item of produtosCompradosDetalhes) {
+                        await new Promise((resolve, reject) => {
+                            db.run(
+                                `INSERT INTO itens_compra (compra_id, produto_id, quantidade, preco_unitario_no_momento_da_compra)
+                                 VALUES (?, ?, ?, ?)`,
+                                [
+                                    compraId,
+                                    item.id,
+                                    item.quantidade_comprada,
+                                    item.preco
+                                ],
+                                function(err) {
+                                    if (err) return reject(err);
+                                    resolve();
+                                }
+                            );
+                        });
+
+                        await new Promise((resolve, reject) => {
+                            db.run(
+                                `UPDATE produtos SET estoque = estoque - ? WHERE id = ?`,
+                                [item.quantidade_comprada, item.id],
+                                function(err) {
+                                    if (err) return reject(err);
+                                    if (this.changes === 0) {
+                                        return reject(new Error(`Falha ao dar baixa no estoque do produto ID ${item.id}. Nenhuma linha afetada.`));
+                                    }
+                                    resolve();
+                                }
+                            );
+                        });
+                    }
+
+                    // --- 9. Finalizar a transação (COMMIT) ---
+                    db.run('COMMIT;', async function(err) {
+                        if (err) {
+                            console.error('Erro ao fazer commit da compra:', err.message);
+                            return res.status(500).json({ error: 'Erro interno ao finalizar a compra.' });
+                        }
+
+                        // --- NOVO BLOCO: Buscar e formatar os detalhes completos da compra recém-criada usando a função auxiliar ---
+                        try {
+                            const compraFormatadaParaRetorno = await getFormattedCompraDetails(compraId);
+
+                            if (!compraFormatadaParaRetorno) {
+                                // Isso não deve acontecer se a compra acabou de ser inserida, mas é uma segurança.
+                                console.error('Erro: Compra recém-criada não encontrada ao tentar formatar detalhes.');
+                                return res.status(500).json({ error: 'Compra registrada, mas não foi possível recuperar seus detalhes.' });
+                            }
+
+                            res.status(201).json(compraFormatadaParaRetorno);
+
+                        } catch (error) {
+                            console.error('Erro ao buscar detalhes da compra após o registro:', error.message);
+                            res.status(500).json({ error: `Compra registrada, mas houve um erro ao buscar seus detalhes: ${error.message}` });
+                        }
+                        // --- FIM DO NOVO BLOCO ---
+                    });
+
+                } catch (innerError) {
+                    console.error('Erro durante a transação da compra:', innerError.message);
+                    db.run('ROLLBACK;', function(rollbackErr) {
+                        if (rollbackErr) {
+                            console.error('Erro ao fazer rollback da compra:', rollbackErr.message);
+                        }
+                        res.status(500).json({ error: `Erro ao registrar a compra: ${innerError.message}. Transação revertida.` });
+                    });
+                }
+            });
         });
 
     } catch (error) {
-        console.error('Erro no processamento da compra:', error.message);
+        console.error('Erro no processamento inicial da compra:', error.message);
         res.status(500).json({ error: error.message || 'Erro ao processar a compra.' });
     }
 });
 
-// Você pode adicionar outras rotas para compras aqui, como:
-// GET /compras - Listar todas as compras
-// GET /compras/:id - Obter detalhes de uma compra específica
-// PUT /compras/:id/status - Atualizar o status de uma compra
-// etc.
+module.exports = router;
+
+router.get('/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const compraFormatada = await getFormattedCompraDetails(id);
+
+        if (!compraFormatada) {
+            return res.status(404).json({ error: 'Compra não encontrada.' });
+        }
+
+        res.json(compraFormatada);
+
+    } catch (error) {
+        console.error(`Erro ao buscar detalhes da compra ${id}:`, error.message);
+        res.status(500).json({ error: 'Erro ao buscar detalhes da compra.' });
+    }
+});
 
 module.exports = router;
