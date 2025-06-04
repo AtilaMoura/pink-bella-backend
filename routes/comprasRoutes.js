@@ -1,170 +1,124 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database'); // Conexão com o banco de dados
-const axios = require('axios'); // Para requisições HTTP ao Melhor Envio
+const db = require('../database');
+const { calcularFrete } = require('../utils/melhorEnvioUtils'); // Para calcular o frete
 
-// Configurações do Melhor Envio
-const MELHOR_ENVIO_TOKEN = process.env.MELHOR_ENVIO_TOKEN;
-const MELHOR_ENVIO_URL = 'https://www.melhorenvio.com.br/api/v2'; // URL da API do Melhor Envio
-
-// 1. POST /compras - Registrar uma nova compra (venda)
-// Endpoint: http://localhost:3000/compras
+// Rota para registrar uma nova compra
+// Endpoint: POST /compras
 router.post('/', async (req, res) => {
-    const { cliente_id, itens } = req.body; // 'itens' será um array de { produto_id, quantidade }
+    const { cliente_id, cep_destino, itens } = req.body;
 
-    if (!cliente_id || !itens || itens.length === 0) {
-        return res.status(400).json({ error: 'ID do cliente e itens da compra são obrigatórios.' });
+    // --- 1. Validação dos Dados de Entrada ---
+    if (!cliente_id || !itens || !Array.isArray(itens) || itens.length === 0) {
+        return res.status(400).json({ error: 'ID do cliente e uma lista de itens são obrigatórios.' });
     }
 
-    let totalCompra = 0;
-    let produtosParaSalvar = []; // Lista formatada dos produtos na compra
-    let produtosParaAtualizarEstoque = []; // Para controle de estoque
+    // Validar cada item
+    for (const item of itens) {
+        if (typeof item.produto_id !== 'number' || typeof item.quantidade !== 'number' || item.quantidade <= 0) {
+            return res.status(400).json({ error: 'Cada item deve ter produto_id e uma quantidade válida.' });
+        }
+    }
+
+    let cliente;
+    let produtosCompradosDetalhes = [];
+    let quantidadeTotalDeItens = 0; // Inicializa a quantidade total de itens aqui
 
     try {
-        // 1. Validar produtos e calcular o total da compra
-        for (const item of itens) {
-            const produto = await new Promise((resolve, reject) => {
-                db.get('SELECT * FROM produtos WHERE id = ?', [item.produto_id], (err, row) => {
-                    if (err) reject(err);
-                    resolve(row);
-                });
-            });
-
-            if (!produto) {
-                return res.status(404).json({ error: `Produto com ID ${item.produto_id} não encontrado.` });
-            }
-            if (produto.estoque < item.quantidade) {
-                return res.status(400).json({ error: `Estoque insuficiente para o produto ${produto.nome}. Disponível: ${produto.estoque}, Solicitado: ${item.quantidade}.` });
-            }
-
-            totalCompra += produto.preco * item.quantidade;
-            produtosParaSalvar.push({
-                id: produto.id,
-                nome: produto.nome,
-                preco: produto.preco,
-                quantidade: item.quantidade,
-                peso: produto.peso,
-                altura: produto.altura,
-                largura: produto.largura,
-                comprimento: produto.comprimento
-            });
-            produtosParaAtualizarEstoque.push({
-                id: produto.id,
-                novaQuantidadeEstoque: produto.estoque - item.quantidade
-            });
-        }
-
-        // 2. Obter informações do cliente para cálculo de frete (CEP)
-        const cliente = await new Promise((resolve, reject) => {
-            db.get('SELECT cep FROM clientes WHERE id = ?', [cliente_id], (err, row) => {
-                if (err) reject(err);
+        // --- 2. Buscar Informações do Cliente ---
+        cliente = await new Promise((resolve, reject) => {
+            db.get('SELECT id, cep, logradouro, bairro, cidade, estado FROM clientes WHERE id = ?', [cliente_id], (err, row) => {
+                if (err) return reject(err);
                 resolve(row);
             });
         });
 
-        if (!cliente || !cliente.cep) {
-            return res.status(400).json({ error: 'Cliente não encontrado ou CEP do cliente não cadastrado para cálculo de frete.' });
+        if (!cliente) {
+            return res.status(404).json({ error: 'Cliente não encontrado.' });
         }
 
-        // 3. Preparar dados para o cálculo de frete do Melhor Envio
-        // Para simulação, estamos usando dimensões/peso mínimos. Adapte conforme a soma dos produtos.
-        const pacote = {
-            height: 2, // Altura mínima em cm
-            width: 11, // Largura mínima em cm
-            length: 16, // Comprimento mínimo em cm
-            weight: 0.1, // Peso mínimo em kg
-        };
-
-        // Calcule as dimensões e peso totais a partir dos produtos
-        let pesoTotal = 0;
-        let dimensoes = { altura: 0, largura: 0, comprimento: 0 };
-        for (const p of produtosParaSalvar) {
-            pesoTotal += p.peso * p.quantidade;
-            // Para as dimensões, você pode usar a maior dimensão individual ou tentar somar, dependendo da embalagem.
-            // Aqui, um exemplo simples que pega a maior dimensão entre os itens para cada dimensão
-            if (p.altura > dimensoes.altura) dimensoes.altura = p.altura;
-            if (p.largura > dimensoes.largura) dimensoes.largura = p.largura;
-            if (p.comprimento > dimensoes.comprimento) dimensoes.comprimento = p.comprimento;
+        const cepParaFrete = cep_destino || cliente.cep;
+        if (!cepParaFrete) {
+             return res.status(400).json({ error: 'CEP de destino não fornecido e não encontrado no cadastro do cliente.' });
         }
 
-        // Garante que as dimensões mínimas do Melhor Envio sejam respeitadas
-        pacote.height = Math.max(dimensoes.altura, 2);
-        pacote.width = Math.max(dimensoes.largura, 11);
-        pacote.length = Math.max(dimensoes.comprimento, 16);
-        pacote.weight = Math.max(pesoTotal, 0.1); // Peso mínimo de 0.1kg
-
-        const dadosFrete = {
-            from: { postal_code: '03472090' }, // Seu CEP de origem (ex: um CEP de SP)
-            to: { postal_code: cliente.cep },
-            // products: productsForMelhorEnvio, // Opcional: detalhar cada produto para cálculo
-            volumes: [pacote],
-            options: {
-                receipt: false, // Aviso de recebimento
-                own_hand: false // Mão própria
-            }
-        };
-
-        // 4. Chamar a API do Melhor Envio para calcular o frete
-        const responseMelhorEnvio = await axios.post(`${MELHOR_ENVIO_URL}/me/shipment/calculate`, dadosFrete, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
-                'User-Agent': 'PinkBellaBackend (utilefacil.123@gmail.com)' // Substitua pelo seu email
-            }
-        });
-
-        // O Melhor Envio pode retornar várias opções de frete, pegamos a primeira
-        const freteCalculado = responseMelhorEnvio.data;
-        if (!freteCalculado || freteCalculado.length === 0 || freteCalculado[0].error) {
-            console.error('Erro no cálculo de frete:', freteCalculado[0]?.error || 'Resposta vazia');
-            return res.status(500).json({ error: 'Não foi possível calcular o frete. Verifique o CEP ou as configurações do Melhor Envio.' });
-        }
-
-        const valorFrete = freteCalculado[0].price; // Pega o preço da primeira opção de frete
-        const nomeServicoFrete = freteCalculado[0].name; // Nome do serviço (ex: PAC, SEDEX)
-
-        totalCompra += parseFloat(valorFrete); // Adiciona o frete ao total
-
-        // 5. Inserir a compra no banco de dados
-        const sqlCompra = `INSERT INTO compras (cliente_id, total, frete, produtos, status) VALUES (?, ?, ?, ?, ?)`;
-        const produtosJson = JSON.stringify(produtosParaSalvar); // Salva os produtos como JSON
-
-        const compraId = await new Promise((resolve, reject) => {
-            db.run(sqlCompra, [cliente_id, totalCompra, valorFrete, produtosJson, 'Pendente'], function(err) {
-                if (err) reject(err);
-                resolve(this.lastID);
-            });
-        });
-
-        // 6. Atualizar o estoque dos produtos
-        for (const produto of produtosParaAtualizarEstoque) {
-            await new Promise((resolve, reject) => {
-                db.run('UPDATE produtos SET estoque = ? WHERE id = ?', [produto.novaQuantidadeEstoque, produto.id], (err) => {
-                    if (err) reject(err);
-                    resolve();
+        // --- 3. Buscar Detalhes dos Produtos e Verificar Estoque ---
+        const produtosPromises = itens.map(item => {
+            return new Promise((resolve, reject) => {
+                // Ajustado para 'quantidade_estoque' (como definimos na sua tabela produtos)
+                db.get('SELECT id, nome, preco, estoque FROM produtos WHERE id = ?', [item.produto_id], (err, row) => {
+                    if (err) return reject(err);
+                    if (!row) {
+                        return reject(new Error(`Produto com ID ${item.produto_id} não encontrado.`));
+                    }
+                    if (row.quantidade_estoque < item.quantidade) { // Usando quantidade_estoque
+                        return reject(new Error(`Estoque insuficiente para o produto: ${row.nome}. Disponível: ${row.quantidade_estoque}, Solicitado: ${item.quantidade}.`));
+                    }
+                    // Adiciona a quantidade comprada ao total para o cálculo do frete
+                    quantidadeTotalDeItens += item.quantidade;
+                    resolve({ ...row, quantidade_comprada: item.quantidade });
                 });
             });
+        });
+
+        produtosCompradosDetalhes = await Promise.all(produtosPromises);
+
+        // --- 4. Calcular o Frete ---
+        // Agora, chamamos calcularFrete passando a quantidadeTotalDeItens diretamente
+        const opcoesFrete = await calcularFrete(cepParaFrete, quantidadeTotalDeItens);
+
+        if (!opcoesFrete || opcoesFrete.length === 0) {
+            return res.status(400).json({ error: 'Não foi possível calcular o frete para este destino com os produtos selecionados.' });
         }
 
-        res.status(201).json({
-            message: 'Compra registrada com sucesso!',
-            compraId: compraId,
-            total: totalCompra,
-            frete: valorFrete,
-            servicoFrete: nomeServicoFrete,
-            status: 'Pendente'
+        const freteEscolhido = opcoesFrete.sort((a, b) => a.price - b.price)[0];
+
+        if (!freteEscolhido) {
+             return res.status(500).json({ error: 'Erro ao selecionar a melhor opção de frete.' });
+        }
+
+        // Calculando o valor total dos produtos
+        let valorTotalProdutos = produtosCompradosDetalhes.reduce((acc, prod) => acc + (prod.preco * prod.quantidade_comprada), 0);
+        let valorTotalCompra = valorTotalProdutos + parseFloat(freteEscolhido.price);
+
+
+        // --- PONTOS SEGUINTES (A SEREM IMPLEMENTADOS) ---
+        // 5. Iniciar uma transação no DB
+        // 6. Salvar a compra na tabela 'compras'
+        // 7. Salvar cada item na tabela 'itens_compra'
+        // 8. Dar baixa no estoque dos produtos
+        // 9. Finalizar a transação
+
+        res.status(200).json({
+            message: 'Dados validados, produtos e frete calculados com sucesso!',
+            cliente: cliente,
+            produtos_comprados_detalhes: produtosCompradosDetalhes.map(p => ({
+                id: p.id,
+                nome: p.nome,
+                preco: p.preco,
+                quantidade_comprada: p.quantidade_comprada
+            })),
+            frete_calculado: {
+                transportadora: freteEscolhido.company.name,
+                servico: freteEscolhido.name,
+                preco: parseFloat(freteEscolhido.price),
+                prazo_dias_uteis: parseInt(freteEscolhido.delivery_time)
+            },
+            valor_total_produtos: valorTotalProdutos,
+            valor_total_compra: valorTotalCompra,
+            cep_utilizado_para_frete: cepParaFrete
         });
 
     } catch (error) {
-        console.error('Erro ao registrar compra:', error.message);
-        if (error.response) { // Erros da API do Melhor Envio
-            console.error('Detalhes do erro Melhor Envio:', error.response.data);
-            return res.status(error.response.status).json({ error: 'Erro na integração com Melhor Envio: ' + (error.response.data.message || JSON.stringify(error.response.data)) });
-        }
-        res.status(500).json({ error: 'Erro interno ao processar a compra.' });
+        console.error('Erro no processamento da compra:', error.message);
+        res.status(500).json({ error: error.message || 'Erro ao processar a compra.' });
     }
 });
 
+// Você pode adicionar outras rotas para compras aqui, como:
+// GET /compras - Listar todas as compras
+// GET /compras/:id - Obter detalhes de uma compra específica
+// PUT /compras/:id/status - Atualizar o status de uma compra
+// etc.
 
 module.exports = router;

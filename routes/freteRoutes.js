@@ -1,65 +1,42 @@
 const express = require('express');
 const router = express.Router();
 const { calcularFrete } = require('../utils/melhorEnvioUtils'); // Importa a função de cálculo de frete
-const db = require('../database'); // Importa a conexão com o banco de dados para buscar detalhes do produto
-const { lookupAddressByCep } = require('../utils/cepUtils'); 
+// const db = require('../database'); // NÃO PRECISAMOS MAIS DO DB AQUI PARA O CÁLCULO DE FRETE
+// const { lookupAddressByCep } = require('../utils/cepUtils'); // NÃO PRECISAMOS MAIS DO CEPUTILS DIRETAMENTE AQUI
 
 // POST /frete/calcular - Calcula o frete para um determinado CEP e uma lista de IDs de produtos
 // Endpoint: http://localhost:3000/frete/calcular
 // Body esperado:
 // {
 //   "cepDestino": "SEU_CEP_DESTINO",
-//   "itens": [ // Agora aceita apenas produto_id e quantidade
-//     { "produto_id": 1, "quantidade": 2 },
-//     { "produto_id": 3, "quantidade": 1 }
+//   "itens": [ // Usaremos apenas a quantidade total de itens para o cálculo
+//     { "produto_id": 1, "quantidade": 2 }, // Exemplo: 2 unidades de produto 1
+//     { "produto_id": 3, "quantidade": 1 }  // Exemplo: 1 unidade de produto 3
 //   ]
 // }
 router.post('/calcular', async (req, res) => {
-    const { cepDestino, itens } = req.body; // 'itens' agora contém produto_id e quantidade
+    const { cepDestino, itens } = req.body;
 
     if (!cepDestino || !itens || !Array.isArray(itens) || itens.length === 0) {
         return res.status(400).json({ error: 'CEP de destino e uma lista de itens (produto_id e quantidade) são obrigatórios para calcular o frete.' });
     }
 
-    let itensProdutosParaFrete = []; // Esta será a lista com peso, altura, etc., dos produtos
+    // --- 1. Calcular a quantidade total de itens ---
+    // A regra de frete depende da quantidade total de itens, não dos itens individuais.
+    let quantidadeTotalDeItens = 0;
+    for (const item of itens) {
+        if (typeof item.quantidade !== 'number' || item.quantidade <= 0) {
+            return res.status(400).json({ error: 'Cada item deve ter uma quantidade válida e positiva.' });
+        }
+        quantidadeTotalDeItens += item.quantidade;
+    }
 
     try {
-         const dadosEnderecoDestino = await lookupAddressByCep(cepDestino);
-        if (!dadosEnderecoDestino) {
-            // Se o CEP for inválido ou não encontrado, retorna um erro
-            return res.status(400).json({ error: 'CEP de destino inválido ou não encontrado. Por favor, verifique o CEP.' });
-        }
+        // --- 2. Chamar a função calcularFrete com a quantidade total de itens ---
+        // A função calcularFrete em melhorEnvioUtils.js agora já incorpora sua lógica de peso/dimensão.
+        const opcoesFreteBrutas = await calcularFrete(cepDestino, quantidadeTotalDeItens);
 
-        // Para cada item recebido, buscamos os detalhes completos do produto no DB
-        for (const item of itens) {
-            if (typeof item.produto_id !== 'number' || typeof item.quantidade !== 'number' || item.quantidade <= 0) {
-                return res.status(400).json({ error: 'Cada item deve ter produto_id e quantidade válidos.' });
-            }
-
-            const produto = await new Promise((resolve, reject) => {
-                db.get('SELECT id, nome, preco, peso, altura, largura, comprimento, estoque FROM produtos WHERE id = ?', [item.produto_id], (err, row) => {
-                    if (err) reject(err);
-                    resolve(row);
-                });
-            });
-
-            if (!produto) {
-                return res.status(404).json({ error: `Produto com ID ${item.produto_id} não encontrado.` });
-            }
-
-            // Adiciona o produto com suas dimensões e peso à lista para o cálculo do frete
-            itensProdutosParaFrete.push({
-                peso: produto.peso,
-                altura: produto.altura,
-                largura: produto.largura,
-                comprimento: produto.comprimento,
-                quantidade: item.quantidade // A quantidade que foi solicitada
-            });
-        }
-
-        // Agora chamamos calcularFrete com a lista de itensProdutosParaFrete completa
-        const opcoesFreteBrutas = await calcularFrete(cepDestino, itensProdutosParaFrete);
-
+        // --- 3. Formatar e retornar as opções de frete ---
         const opcoesFreteFormatadas = opcoesFreteBrutas
             .map(opcao => {
                 return {
@@ -74,13 +51,20 @@ router.post('/calcular', async (req, res) => {
             .sort((a, b) => a.preco_frete - b.preco_frete);
 
         res.json({
-            endereco_destino: dadosEnderecoDestino, // Objeto com logradouro, bairro, cidade, estado, cep
-            opcoes_frete: opcoesFreteFormatadas
+            // Não precisamos mais retornar o 'endereco_destino' aqui,
+            // já que o `cepUtils` não é chamado nesta rota.
+            // Se o frontend precisar do endereço, ele faria a chamada ao ViaCEP separadamente ou o cliente já teria.
+            opcoes_frete: opcoesFreteFormatadas,
+            quantidade_total_de_itens_considerada: quantidadeTotalDeItens // Útil para depuração
         });
 
     } catch (error) {
         console.error('Erro na rota /frete/calcular:', error.message);
-        res.status(500).json({ error: error.message || 'Erro ao calcular o frete.' });
+        // Melhora a mensagem de erro para o cliente
+        const errorMessage = error.message.includes('Melhor Envio') ?
+                             error.message :
+                             'Erro ao calcular o frete. Verifique o CEP e tente novamente.';
+        res.status(500).json({ error: errorMessage });
     }
 });
 
