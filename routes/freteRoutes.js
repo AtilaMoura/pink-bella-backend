@@ -49,7 +49,7 @@ router.post('/calcular', async (req, res) => {
                 };
             })
             .sort((a, b) => a.preco_frete - b.preco_frete);
-
+            
         res.json({
             // Não precisamos mais retornar o 'endereco_destino' aqui,
             // já que o `cepUtils` não é chamado nesta rota.

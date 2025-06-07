@@ -38,6 +38,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     largura REAL,
                     comprimento REAL,
                     estoque INTEGER NOT NULL,
+                    descricao TEXT,
                     imagem TEXT
                 )
             `, (err) => {
@@ -99,6 +100,13 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     servico_frete TEXT,
                     prazo_frete_dias INTEGER,
                     codigo_rastreio TEXT,
+                    melhor_envio_service_id INTEGER,
+                melhor_envio_label_id TEXT,
+                last_webhook_event_id TEXT,
+                peso_pacote REAL,
+                altura_pacote REAL,
+                largura_pacote REAL,
+                comprimento_pacote REAL,
                     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
                     FOREIGN KEY (endereco_entrega_id) REFERENCES enderecos(id)
                 )

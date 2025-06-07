@@ -79,7 +79,12 @@ async function calcularFrete(cepDestino, quantidadeTotalItens) { // <-- AGORA RE
             }
         });
 
-        const opcoesValidas = response.data.filter(service => !service.error);
+        const opcoesValidas = response.data
+            .filter(service => !service.error)
+            .map(service => ({
+                ...service,
+                pacote_utilizado: pacoteFinal // Adiciona os detalhes do pacote usado para o cálculo
+            }));
 
         if (opcoesValidas.length === 0) {
             console.error('Melhor Envio: Nenhuma opção de frete válida encontrada para o trecho/dimensões.');
