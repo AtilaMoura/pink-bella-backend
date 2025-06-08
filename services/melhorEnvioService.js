@@ -18,6 +18,7 @@ const MEDIDAS_MINIMAS = {
  * @param {string} cepDestino - CEP de destino.
  * @param {number} quantidadeTotalItens - Quantidade total de unidades de produtos na compra.
  * @returns {Promise<Array>} - Retorna um array de opções de frete.
+ * @param {Array<Object>} orders
  */
 async function calcularFrete(cepDestino, quantidadeTotalItens) { // <-- AGORA RECEBE APENAS quantidadeTotalItens
     if (!MELHOR_ENVIO_TOKEN) {
@@ -105,6 +106,136 @@ async function calcularFrete(cepDestino, quantidadeTotalItens) { // <-- AGORA RE
     }
 }
 
+const DADOS_ORIGEM = {
+    nome: 'Pink Bella',
+    email: 'utilefacil.123@gmail.com',
+    cpf: '43740234881',
+    telefone: '11978445381',
+    logradouro: 'rua candido rodrigues',
+    numero: '21',
+    complemento: 'bloco A Ap 4',
+    bairro: 'Jardim Vila Formosa',
+    cidade: 'São Paulo',
+    estado: 'SP',
+    cep: '03472090'
+};
+
+async function adicionarEnviosAoCarrinho(listaDeCompras) {
+    const envios = listaDeCompras.map((compra) => ({
+        from: { ...DADOS_ORIGEM },
+        to: {
+            nome: compra.cliente_nome,
+            email: compra.cliente_email,
+            cpf: compra.cliente_cpf,
+            telefone: compra.cliente_telefone,
+            logradouro: compra.endereco_logradouro,
+            numero: compra.endereco_numero,
+            complemento: compra.endereco_complemento,
+            bairro: compra.endereco_bairro,
+            cidade: compra.endereco_cidade,
+            estado: compra.endereco_estado,
+            cep: compra.endereco_cep
+        },
+        package: {
+            peso: compra.peso_pacote,
+            comprimento: compra.comprimento_pacote,
+            altura: compra.altura_pacote,
+            largura: compra.largura_pacote
+        },
+        service: String(compra.melhor_envio_service_id), // Deixa null para que o Melhor Envio calcule
+        agency: null,
+        products: [{
+            name: 'Compra #' + compra.compra_id,
+            quantity: 1,
+            unitary_value: Math.round(compra.valor_total * 100) // centavos
+        }],
+        options: {
+            insurance_value: compra.valor_total,
+            receipt: false,
+            own_hand: false,
+            reverse: false,
+            non_commercial: true
+        }
+    }));
+
+    const data = {
+  "from": {
+    "name": "Pink Bella", // Mantendo o nome da sua loja
+    "phone": "+5511978445381", // Seu número real (apenas números, com DDI + DDD)
+    "email": "utilefacil.123@gmail.com", // Seu email real
+    "document": "43740234881", // Seu CPF ou CNPJ (apenas números)
+    "address": 'Rua Cândido Rodrigues',
+    "state_register": 'SP',
+    "number": '21',
+    "district": 'Jardim Vila Formosa',
+    "city": 'São Paulo',
+    "country_id": 'BR',
+    "postal_code": '03472-090',
+    "state_abbr": 'SP',
+    "complement": 'bloco A Ap 4',
+  },
+  "to": {
+    "name": "Maria Silva", // Nome do cliente
+    "phone": "+5511987654321", // Número do cliente (apenas números, com DDI + DDD)
+    "email": "maria.silva@xample.com", // Email do cliente
+    "document": "72656980704", // CPF do cliente (apenas números) "document": '38185684843',
+    "address": 'Praça da Sé',
+    "complement": 'Apto 10',
+    "number": '100',
+    "district": 'Sé',
+    "city": 'São Paulo',
+    "country_id": 'BR',
+    "postal_code": '01001000',
+    "state_abbr": 'SP'
+  },
+  "service": 2, // <-- Alterado para NUMBER, como esperado. ID do serviço (ex: PAC, SEDEX).
+  "volumes": [
+    {
+      "height": 10, // cm (use as dimensões reais do seu pacote)
+      "width": 25, // cm
+      "length": 25, // cm
+      "weight": 0.75 // kg
+    }
+  ],
+  "options": {
+    "insurance_value": 111.98, // Valor segurado (o valor total dos produtos)
+    "receipt": false,
+    "own_hand": false,
+    "reverse": false,
+    "non_commercial": true,
+    "platform": "Pink Bella",
+    "tags": [
+      {
+        "tag": "PinkBella-Compra-2", // Exemplo de tag
+        "url": "https://sua-plataforma.com/pedidos/2" // URL do pedido (opcional)
+      }
+    ],
+    "invoice": { "key": null } // <-- Adicionado, mesmo que non_commercial seja true
+  },
+  "products": [ // Produtos para a Declaração de Conteúdo
+    {
+      "name": "Vestido de alça", // Nome real do produto
+      "quantity": "1", // Mantido como STRING
+      "unitary_value": "55.99" // Mantido como STRING
+    }
+  ]
+};
+
+    const response = await axios.post(`${MELHOR_ENVIO_URL}/me/cart`, data, {
+        headers: {
+            'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+    });
+
+    return response.data;
+}
+
+
+// ... (Adicione outras funções de serviço do Melhor Envio aqui, como consultar saldo, pagar etiquetas) ...
+
 module.exports = {
-    calcularFrete
+    calcularFrete,
+    adicionarEnviosAoCarrinho
 };

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
-const { calcularFrete } = require('../utils/melhorEnvioUtils'); // Para calcular o frete
+const { calcularFrete } = require('../services/melhorEnvioService'); // Para calcular o frete
 
 async function getFormattedCompraDetails(compraId) {
     // 1. Buscar detalhes da compra, cliente e endereço de entrega

@@ -9,6 +9,7 @@ const clientesRoutes = require('./routes/clientesRoutes');
 const comprasRoutes = require('./routes/comprasRoutes');
 const freteRoutes = require('./routes/freteRoutes');
 const addressRoutes = require('./routes/addressRoutes');
+const melhorEnvioRoutes = require('./routes/melhorEnvioRoutes'); 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,6 +29,7 @@ app.use('/clientes', clientesRoutes);
 app.use('/compras', comprasRoutes);
 app.use('/frete', freteRoutes); 
 app.use('/endereco', addressRoutes);
+app.use('/melhor-envio', melhorEnvioRoutes);
 
 // Inicia o servidor
 app.listen(PORT, () => {

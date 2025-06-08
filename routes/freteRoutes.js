@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { calcularFrete } = require('../utils/melhorEnvioUtils'); // Importa a função de cálculo de frete
+const { calcularFrete } = require('../services/melhorEnvioService'); // Importa a função de cálculo de frete
 // const db = require('../database'); // NÃO PRECISAMOS MAIS DO DB AQUI PARA O CÁLCULO DE FRETE
 // const { lookupAddressByCep } = require('../utils/cepUtils'); // NÃO PRECISAMOS MAIS DO CEPUTILS DIRETAMENTE AQUI
 
