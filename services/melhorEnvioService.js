@@ -106,57 +106,10 @@ async function calcularFrete(cepDestino, quantidadeTotalItens) { // <-- AGORA RE
     }
 }
 
-const DADOS_ORIGEM = {
-    nome: 'Pink Bella',
-    email: 'utilefacil.123@gmail.com',
-    cpf: '43740234881',
-    telefone: '11978445381',
-    logradouro: 'rua candido rodrigues',
-    numero: '21',
-    complemento: 'bloco A Ap 4',
-    bairro: 'Jardim Vila Formosa',
-    cidade: 'São Paulo',
-    estado: 'SP',
-    cep: '03472090'
-};
+
 
 async function adicionarEnviosAoCarrinho(listaDeCompras) {
-    const envios = listaDeCompras.map((compra) => ({
-        from: { ...DADOS_ORIGEM },
-        to: {
-            nome: compra.cliente_nome,
-            email: compra.cliente_email,
-            cpf: compra.cliente_cpf,
-            telefone: compra.cliente_telefone,
-            logradouro: compra.endereco_logradouro,
-            numero: compra.endereco_numero,
-            complemento: compra.endereco_complemento,
-            bairro: compra.endereco_bairro,
-            cidade: compra.endereco_cidade,
-            estado: compra.endereco_estado,
-            cep: compra.endereco_cep
-        },
-        package: {
-            peso: compra.peso_pacote,
-            comprimento: compra.comprimento_pacote,
-            altura: compra.altura_pacote,
-            largura: compra.largura_pacote
-        },
-        service: String(compra.melhor_envio_service_id), // Deixa null para que o Melhor Envio calcule
-        agency: null,
-        products: [{
-            name: 'Compra #' + compra.compra_id,
-            quantity: 1,
-            unitary_value: Math.round(compra.valor_total * 100) // centavos
-        }],
-        options: {
-            insurance_value: compra.valor_total,
-            receipt: false,
-            own_hand: false,
-            reverse: false,
-            non_commercial: true
-        }
-    }));
+    
 
     const data = {
   "from": {
@@ -221,7 +174,9 @@ async function adicionarEnviosAoCarrinho(listaDeCompras) {
   ]
 };
 
-    const response = await axios.post(`${MELHOR_ENVIO_URL}/me/cart`, data, {
+console.log("Payload FINAL para Melhor Envio certo:", JSON.stringify(data, null, 2));
+
+    const response = await axios.post(`${MELHOR_ENVIO_URL}/me/cart`, listaDeCompras, {
         headers: {
             'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
             'Content-Type': 'application/json',

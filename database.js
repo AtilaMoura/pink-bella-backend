@@ -132,6 +132,65 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 else console.log('Tabela itens_compra verificada/criada.');
             });
 
+            db.run(`
+    CREATE TABLE IF NOT EXISTS configuracoes_loja (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        telefone TEXT NOT NULL,
+        email TEXT NOT NULL,
+        documento TEXT NOT NULL, -- CPF ou CNPJ da loja
+        cnpj TEXT, -- Opcional, se for Pessoa Jurídica (PJ) e documento for CPF
+        inscricao_estadual TEXT, -- Opcional, se for PJ
+        logradouro TEXT NOT NULL,
+        complemento TEXT,
+        numero TEXT NOT NULL,
+        bairro TEXT NOT NULL,
+        cidade TEXT NOT NULL,
+        estado_sigla TEXT NOT NULL, -- Ex: SP, RJ (use a sigla do estado)
+        cep TEXT NOT NULL,
+        pais_id TEXT NOT NULL DEFAULT 'BR'
+    )
+`, (err) => {
+    if (err) console.error('Erro ao criar tabela configuracoes_loja:', err.message);
+    else {
+        console.log('Tabela configuracoes_loja verificada/criada.');
+
+        // Inserir os dados da sua loja (apenas se a tabela estiver vazia)
+        // Isso evita inserir os dados múltiplas vezes a cada vez que o servidor inicia
+        db.get(`SELECT COUNT(*) AS count FROM configuracoes_loja`, (err, row) => {
+            if (err) {
+                console.error('Erro ao verificar registros em configuracoes_loja:', err.message);
+                return;
+            }
+            if (row.count === 0) {
+                db.run(`
+                    INSERT INTO configuracoes_loja (
+                        nome, telefone, email, documento, logradouro,
+                        numero, bairro, cidade, estado_sigla, cep, complemento
+                    ) VALUES (
+                        'Pink Bella',
+                        '+5511978445381',
+                        'utilefacil.123@gmail.com',
+                        '43740234881',
+                        'Rua Cândido Rodrigues',
+                        '21',
+                        'Jardim Vila Formosa',
+                        'São Paulo',
+                        'SP',
+                        '03472090',
+                        'bloco A Ap 4'
+                    )
+                `, (err) => {
+                    if (err) console.error('Erro ao inserir dados iniciais em configuracoes_loja:', err.message);
+                    else console.log('Dados iniciais inseridos em configuracoes_loja.');
+                });
+            } else {
+                console.log('Dados iniciais já existem em configuracoes_loja (pulando inserção).');
+            }
+        });
+    }
+});
+
             // Mensagem final após todas as tentativas de criação
             console.log('Todas as tabelas foram processadas.');
         });
