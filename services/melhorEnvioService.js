@@ -119,7 +119,7 @@ async function adicionarEnviosAoCarrinho(purchaseId) {
     const purchaseDetailsQuery = `
       SELECT
         c.id AS compra_id,
-        c.valor_total AS insurance_value,
+        c.valor_produtos AS insurance_value,
         c.melhor_envio_service_id AS service_id,
         c.peso_pacote AS package_weight,
         c.altura_pacote AS package_height,
@@ -261,6 +261,21 @@ async function adicionarEnviosAoCarrinho(purchaseId) {
         'Accept': 'application/json'
       }
     });
+
+    const price = response.data.price; // valor do frete (string ou number)
+    const codigo_envio = response.data.protocol;
+
+    console.log(price, codigo_envio)
+await new Promise((resolve, reject) => { 
+  db.run(
+    'UPDATE compras SET valor_frete = ?, codigo_envio = ? WHERE id = ?',
+    [parseFloat(price), codigo_envio, purchaseId],
+    function (err) {
+      if (err) return reject(err);
+      resolve();
+    }
+  );
+});
 
     return response.data;
 

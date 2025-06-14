@@ -192,10 +192,6 @@ async function updateOrderStatus(compraId, status) {
   }
 }
 
-
-
-
-
 router.post('/', async (req, res) => {
     const { cliente_id, endereco_entrega_id, itens } = req.body;
 
@@ -316,6 +312,7 @@ router.post('/', async (req, res) => {
                             cliente_id,
                             endereco_entrega_id,
                             valor_total,
+                            valor_produtos,
                             status_compra,
                             valor_frete,
                             transportadora,
@@ -326,11 +323,12 @@ router.post('/', async (req, res) => {
                             altura_pacote,
                             largura_pacote,
                             comprimento_pacote
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [
                             cliente_id,
                             enderecoEntrega.id,
                             valorTotalCompra,
+                            valorTotalProdutos,
                             'Pendente',
                             parseFloat(freteEscolhido.price),
                             freteEscolhido.company.name,
