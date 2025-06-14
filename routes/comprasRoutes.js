@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database');
 const { calcularFrete } = require('../services/melhorEnvioService'); // Para calcular o frete
+const melhorEnvioService = require('../services/melhorEnvioService');
 
 async function getFormattedCompraDetails(compraId) {
     // 1. Buscar detalhes da compra, cliente e endereço de entrega
@@ -114,6 +115,86 @@ async function getFormattedCompraDetails(compraId) {
 
     return compraFormatada;
 }
+
+async function updateOrderStatus(compraId, status) {
+  const allowedStatuses = [
+    'Pendente',
+    'Pago',
+    'Pagamento Recusado',
+    'Cancelado',
+    'Aguardando Etiqueta',
+    'Etiqueta Gerada',
+    'Pronto para Envio',
+    'Em Trânsito',
+    'Entregue',
+    'Extraviado',
+    'Devolvido'
+  ];
+
+  if (!allowedStatuses.includes(status)) {
+    throw new Error(`Status "${status}" não é permitido.`);
+  }
+
+  try {
+    const compraExistente = await new Promise((resolve, reject) => {
+      db.get('SELECT id, status_compra FROM compras WHERE id = ?', [compraId], (err, row) => {
+        if (err) return reject(err);
+        resolve(row);
+      });
+    });
+
+    if (!compraExistente) {
+      throw new Error('Compra não encontrada.');
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE compras SET status_compra = ? WHERE id = ?',
+        [status, compraId],
+        function (err) {
+          if (err) return reject(err);
+          resolve(this.changes);
+        }
+      );
+    });
+
+    if (result === 0) {
+      throw new Error('Status não atualizado. Já estava com esse valor ou ID inválido.');
+    }
+
+    let carrinhoResultado = null;
+
+    if (status === 'Pago') {
+      try {
+        carrinhoResultado = await melhorEnvioService.adicionarEnviosAoCarrinho(compraId); // <--- Você vai criar essa função
+        // Se quiser já atualizar o status para "Aguardando Etiqueta":
+        await updateOrderStatus(compraId, 'Aguardando Etiqueta');
+      } catch (e) {
+        console.warn(`⚠️ Erro ao adicionar ao carrinho do Melhor Envio para compra ${compraId}:`, e.message);
+      }
+    }
+
+    const compraAtualizada = await getFormattedCompraDetails(compraId);
+
+    if (!compraAtualizada) {
+      throw new Error('Erro ao buscar detalhes da compra atualizada.');
+    }
+
+    return {
+      message: `Status da compra ${compraId} atualizado para "${status}" com sucesso.`,
+      compra: compraAtualizada,
+      carrinho: carrinhoResultado
+    };
+
+  } catch (error) {
+    console.error('Erro ao atualizar status da compra:', error.message);
+    throw error;
+  }
+}
+
+
+
+
 
 router.post('/', async (req, res) => {
     const { cliente_id, endereco_entrega_id, itens } = req.body;
@@ -370,74 +451,12 @@ router.put('/:id/status', async (req, res) => {
     const compraId = req.params.id;
     const { status } = req.body;
 
-    // Lista de status permitidos (você pode expandir esta lista conforme necessário)
-    const allowedStatuses = [
-        'Pendente',
-        'Pago',
-        'Cancelado',
-        'Aguardando Etiqueta', // Exemplo de um status que pode vir antes de "Em Preparação"
-        'Etiqueta Gerada', // Quando a etiqueta do Melhor Envio for gerada
-        'Em Preparação',    // Quando o pedido está sendo separado
-        'Em Trânsito',
-        'Entregue',
-        'Extraviado',
-        'Devolvido'
-    ];
-
-    // 1. Validação dos Dados de Entrada
-    if (!status || !allowedStatuses.includes(status)) {
-        return res.status(400).json({
-            error: `Status inválido. Status permitidos: ${allowedStatuses.join(', ')}.`
-        });
-    }
+    
 
     try {
-        // 2. Verificar se a compra existe
-        const compraExistente = await new Promise((resolve, reject) => {
-            db.get('SELECT id, status_compra FROM compras WHERE id = ?', [compraId], (err, row) => {
-                if (err) return reject(err);
-                resolve(row);
-            });
-        });
+        const pedidoAtualizado = await updateOrderStatus(compraId, status);
 
-        if (!compraExistente) {
-            return res.status(404).json({ error: 'Compra não encontrada.' });
-        }
-
-        // Opcional: Lógica para transições de status válidas
-        // Por exemplo, você não pode ir de "Entregue" para "Pendente"
-        // if (compraExistente.status_compra === 'Entregue' && status === 'Pendente') {
-        //     return res.status(400).json({ error: 'Não é possível mudar o status de "Entregue" para "Pendente".' });
-        // }
-        // Para o seu caso de "Pendente" -> "Pago", isso é uma transição válida.
-
-        // 3. Atualizar o status da compra
-        const result = await new Promise((resolve, reject) => {
-            db.run(
-                'UPDATE compras SET status_compra = ? WHERE id = ?',
-                [status, compraId],
-                function(err) {
-                    if (err) return reject(err);
-                    resolve(this.changes); // Retorna o número de linhas afetadas
-                }
-            );
-        });
-
-        if (result === 0) {
-            return res.status(404).json({ error: 'Compra não encontrada ou status já era o mesmo.' });
-        }
-
-        // 4. Buscar e retornar os detalhes atualizados da compra
-        const compraAtualizada = await getFormattedCompraDetails(compraId);
-
-        if (!compraAtualizada) {
-            return res.status(500).json({ error: 'Erro ao buscar detalhes da compra atualizada.' });
-        }
-
-        res.status(200).json({
-            message: `Status da compra ${compraId} atualizado para "${status}" com sucesso.`,
-            compra: compraAtualizada
-        });
+        res.json(pedidoAtualizado);
 
     } catch (error) {
         console.error('Erro ao atualizar status da compra:', error.message);
