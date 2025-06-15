@@ -289,11 +289,43 @@ await new Promise((resolve, reject) => {
   }
 }
 
+async function getTotalValorCarrinho() {
+  try {
+    const response = await axios.get(`${MELHOR_ENVIO_URL}/me/cart`, {
+      headers: {
+        'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    const etiquetas = response.data.data;
+
+
+    // Garante que é um array
+    if (!Array.isArray(etiquetas)) {
+      throw new Error('Resposta do carrinho não é um array');
+    }
+
+    // Soma os valores de todas as etiquetas no carrinho
+    const total = etiquetas.reduce((acc, etiqueta) => {
+      return acc + parseFloat(etiqueta.price || 0);
+    }, 0);
+
+    return { total };
+
+  } catch (error) {
+    console.error('Erro ao consultar o carrinho:', error.message);
+    throw error;
+  }
+}
+
+
 
 
 // ... (Adicione outras funções de serviço do Melhor Envio aqui, como consultar saldo, pagar etiquetas) ...
 
 module.exports = {
     calcularFrete,
-    adicionarEnviosAoCarrinho
+    adicionarEnviosAoCarrinho,
+    getTotalValorCarrinho
 };

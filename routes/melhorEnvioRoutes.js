@@ -48,4 +48,14 @@ router.post('/adicionar-ao-carrinho', async (req, res) => {
   }
 });
 
+router.get('/valorfrete', async(req, res) => {
+  try {
+    const valor = await melhorEnvioService.getTotalValorCarrinho();
+    console.log('Valor do carrinho:', valor);
+    return res.json(valor);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao consultar o valor do carrinho' });
+  }
+})
+
 module.exports = router;
