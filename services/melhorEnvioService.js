@@ -336,24 +336,37 @@ async function getBalance() {
   }
 }
 
-async function adicionarCredito(value, gateway = 'pix') {
-    try {
-      console.log(`Solicitando adição de R$ ${value} via ${gateway} ao Melhor Envio...`);
-      const payload = {
-        value: parseFloat(value),
-        gateway: gateway
-      };
-      // Usando a instância 'api'
-      const response = await api.post('/me/deposit', payload); 
-      return response.data;
-    } catch (error) {
-      console.error("Erro ao adicionar fundos (Pix) no Melhor Envio:", error.message);
-      if (error.response) {
-        console.error("Detalhes do erro da API Melhor Envio (depósito Pix):", error.response.data);
+async function gerarCodigoPix(valorReais) {
+  try {
+    console.log(`Gerando código PIX para R$${valorReais}...`);
+
+    const payload = {
+      value: valorReais.toFixed(2),          // valor como string, ex: "10.50"
+      gateway: 'yapay-transparente',          // gateway correto
+      slug: 'pix'                            // tipo de pagamento
+      // Você pode adicionar outros campos opcionais, ex: redirect_url, finger_print, company_name, cnpj
+    };
+
+    const response = await axios.post(`${MELHOR_ENVIO_URL}/me/balance`, payload, {
+      headers: {
+        'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': `${SEU_EMAIL_MELHOR_ENVIO}`  // altere para sua app e contato
       }
-      throw error;
+    });
+
+    return response.data;
+
+  } catch (error) {
+    console.error('Erro ao gerar código PIX:', error.message);
+    if (error.response) {
+      console.error('Detalhes do erro da API Melhor Envio (PIX):', error.response.data);
     }
+    throw error;
+  }
 }
+
 
 
 
@@ -362,5 +375,5 @@ module.exports = {
     adicionarEnviosAoCarrinho,
     getTotalValorCarrinho,
     getBalance,
-    adicionarCredito
+    gerarCodigoPix
 };
