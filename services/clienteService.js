@@ -333,17 +333,24 @@ function desativarCliente(db, id) {
           }
 
           if (cliente.ativo === 0) {
-            db.run('ROLLBACK;');
-            return reject({ status: 409, message: 'Cliente já está inativo.' });
-          }
-
-          await new Promise((res, rej) => {
+            await new Promise((res, rej) => {
+            db.run('UPDATE clientes SET ativo = 1 WHERE id = ?', [id], function (err) {
+              if (err) return rej(err);
+              if (this.changes === 0) return rej(new Error('Nenhuma linha afetada.'));
+              res();
+            });
+          });
+          } else{
+            await new Promise((res, rej) => {
             db.run('UPDATE clientes SET ativo = 0 WHERE id = ?', [id], function (err) {
               if (err) return rej(err);
               if (this.changes === 0) return rej(new Error('Nenhuma linha afetada.'));
               res();
             });
           });
+          }
+
+          
 
           db.run('COMMIT;', function (err) {
             if (err) return reject(new Error('Erro ao fazer commit.'));

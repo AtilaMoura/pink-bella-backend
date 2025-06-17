@@ -92,8 +92,8 @@ router.delete('/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    await desativarCliente(db, id);
-    res.status(200).json({ message: 'Cliente desativado com sucesso.' });
+    await desativarCliente(id);
+    res.status(200).json({ message: 'Cliente desativado ou ativado com sucesso.' });
   } catch (error) {
     if (error.status) {
       res.status(error.status).json({ error: error.message });

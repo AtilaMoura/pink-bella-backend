@@ -107,8 +107,6 @@ async function calcularFrete(cepDestino, quantidadeTotalItens) { // <-- AGORA RE
     }
 }
 
-
-
 async function adicionarEnviosAoCarrinho(purchaseId) {
   if (!purchaseId) {
     throw new Error("É necessário fornecer um ID de compra válido.");
@@ -319,13 +317,50 @@ async function getTotalValorCarrinho() {
   }
 }
 
+async function getBalance() {
+  try {
+    console.log('Consultando saldo da conta no Melhor Envio...');
+    const response = await axios.get(`${MELHOR_ENVIO_URL}/me/balance`, {
+      headers: {
+        'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
+        'Accept': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Erro ao consultar saldo no Melhor Envio:", error.message);
+    if (error.response) {
+      console.error("Detalhes do erro da API Melhor Envio (saldo):", error.response.data);
+    }
+    throw error;
+  }
+}
+
+async function adicionarCredito(value, gateway = 'pix') {
+    try {
+      console.log(`Solicitando adição de R$ ${value} via ${gateway} ao Melhor Envio...`);
+      const payload = {
+        value: parseFloat(value),
+        gateway: gateway
+      };
+      // Usando a instância 'api'
+      const response = await api.post('/me/deposit', payload); 
+      return response.data;
+    } catch (error) {
+      console.error("Erro ao adicionar fundos (Pix) no Melhor Envio:", error.message);
+      if (error.response) {
+        console.error("Detalhes do erro da API Melhor Envio (depósito Pix):", error.response.data);
+      }
+      throw error;
+    }
+}
 
 
-
-// ... (Adicione outras funções de serviço do Melhor Envio aqui, como consultar saldo, pagar etiquetas) ...
 
 module.exports = {
     calcularFrete,
     adicionarEnviosAoCarrinho,
-    getTotalValorCarrinho
+    getTotalValorCarrinho,
+    getBalance,
+    adicionarCredito
 };
