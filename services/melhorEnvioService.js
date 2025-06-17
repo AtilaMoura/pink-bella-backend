@@ -366,7 +366,65 @@ async function gerarCodigoPix(valorReais) {
     throw error;
   }
 }
+//
 
+async function gerarPixComValorDoCarrinho() {
+    try {
+        const { total } = await getTotalValorCarrinho();
+
+        if (!total || total <= 0) {
+            throw new Error('Carrinho vazio ou valor inválido para gerar PIX.');
+        }
+
+        // Chama a função que faz a requisição para o Melhor Envio (adicionarCredito)
+        // Certifique-se de que 'adicionarCredito' está retornando 'response.data' corretamente
+        const pixResponse = await gerarCodigoPix(total); 
+
+        let codigoPixCopiaECola = '';
+        let urlQrCodeImagem = '';
+        let detalhesInternosPix = null; // Para guardar o JSON parseado de 'payment.response'
+
+        // A estrutura da resposta é mais "plana" do que eu esperava para os campos principais:
+        // 'digitable' e 'redirect' estão no nível superior.
+        if (pixResponse) {
+            codigoPixCopiaECola = pixResponse.digitable || '';
+            urlQrCodeImagem = pixResponse.redirect || ''; // A URL da imagem do QR Code
+
+            // O campo 'response' dentro de 'payment' é uma string JSON que precisa ser parseada.
+            if (pixResponse.payment && typeof pixResponse.payment.response === 'string') {
+                try {
+                    // Tenta fazer o parse da string JSON aninhada
+                    const parsedInternalResponse = JSON.parse(pixResponse.payment.response);
+                    detalhesInternosPix = parsedInternalResponse; // Armazena para debug ou uso futuro
+
+                    // Você pode opcionalmente verificar aqui se os caminhos internos batem com os externos
+                    // console.log('Parsed internal qrcode_original_path:', parsedInternalResponse.data_response?.transaction?.payment?.qrcode_original_path);
+                    // console.log('Parsed internal qrcode_path:', parsedInternalResponse.data_response?.transaction?.payment?.qrcode_path);
+
+                } catch (e) {
+                    console.error('Erro ao fazer parse da string JSON interna (pixResponse.payment.response):', e);
+                }
+            }
+
+
+        } else {
+            console.error('Resposta da API de PIX vazia ou inválida:', pixResponse);
+            throw new Error('Não foi possível obter uma resposta válida da API de PIX.');
+        }
+
+        return {
+            valor: total.toFixed(2),
+            codigoParaCopiar: codigoPixCopiaECola,
+            urlQrCodeImagem: urlQrCodeImagem,
+            // Opcional: Incluir os detalhes internos se precisar deles no frontend
+            //detalhesApiCompletos: detalhesInternosPix 
+        };
+
+    } catch (error) {
+        console.error('Erro ao gerar código PIX com valor do carrinho:', error.message);
+        throw error;
+    }
+}
 
 
 
@@ -375,5 +433,6 @@ module.exports = {
     adicionarEnviosAoCarrinho,
     getTotalValorCarrinho,
     getBalance,
-    gerarCodigoPix
+    gerarCodigoPix,
+    gerarPixComValorDoCarrinho
 };

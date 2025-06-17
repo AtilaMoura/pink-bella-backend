@@ -81,4 +81,13 @@ router.post('/pix', async (req, res) => {
   }
 });
 
+router.get('/pix-valor-carinhoo', async (req, res) => {
+  try {
+    const pixData = await melhorEnvioService.gerarPixComValorDoCarrinho();
+    res.json(pixData);
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Erro interno ao gerar PIX' });
+  }
+});
+
 module.exports = router;
