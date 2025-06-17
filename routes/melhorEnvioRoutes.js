@@ -51,8 +51,7 @@ router.post('/adicionar-ao-carrinho', async (req, res) => {
 router.get('/valorfrete', async(req, res) => {
   try {
     const valor = await melhorEnvioService.getTotalValorCarrinho();
-    console.log('Valor do carrinho:', valor);
-    return res.json(valor);
+    return res.json({total : valor.total});
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao consultar o valor do carrinho' });
   }
@@ -87,6 +86,30 @@ router.get('/pix-valor-carinhoo', async (req, res) => {
     res.json(pixData);
   } catch (error) {
     res.status(500).json({ error: error.message || 'Erro interno ao gerar PIX' });
+  }
+});
+
+router.get('/saldo-carrinho', async (req, res) => {
+    try {
+    const saldo = await melhorEnvioService.getBalance();
+    const valor = await melhorEnvioService.getTotalValorCarrinho();
+    res.json({
+      saldo : saldo.balance,
+      Frete : valor.total
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro busca valores' });
+  }
+});
+
+router.get('/comprar-etiquetas', async (req, res) => {
+  try {
+    
+    const resultado = await melhorEnvioService.comprarEtiquetas();
+    res.json(resultado);
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

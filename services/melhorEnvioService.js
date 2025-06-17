@@ -295,7 +295,6 @@ async function getTotalValorCarrinho() {
         'Accept': 'application/json'
       }
     });
-
     const etiquetas = response.data.data;
 
 
@@ -305,11 +304,17 @@ async function getTotalValorCarrinho() {
     }
 
     // Soma os valores de todas as etiquetas no carrinho
-    const total = etiquetas.reduce((acc, etiqueta) => {
+    /*const total = etiquetas.reduce((acc, etiqueta) => {
       return acc + parseFloat(etiqueta.price || 0);
-    }, 0);
+    }, 0);*/
 
-    return { total };
+    const resultado = etiquetas.reduce((acc, etiqueta) => {
+      acc.total += parseFloat(etiqueta.price || 0);
+      acc.ids.push(etiqueta.id);
+      return acc;
+    }, { total: 0, ids: [] });
+
+    return resultado;
 
   } catch (error) {
     console.error('Erro ao consultar o carrinho:', error.message);
@@ -366,7 +371,6 @@ async function gerarCodigoPix(valorReais) {
     throw error;
   }
 }
-//
 
 async function gerarPixComValorDoCarrinho() {
     try {
@@ -396,7 +400,7 @@ async function gerarPixComValorDoCarrinho() {
                     // Tenta fazer o parse da string JSON aninhada
                     const parsedInternalResponse = JSON.parse(pixResponse.payment.response);
                     detalhesInternosPix = parsedInternalResponse; // Armazena para debug ou uso futuro
-
+                    
                     // Você pode opcionalmente verificar aqui se os caminhos internos batem com os externos
                     // console.log('Parsed internal qrcode_original_path:', parsedInternalResponse.data_response?.transaction?.payment?.qrcode_original_path);
                     // console.log('Parsed internal qrcode_path:', parsedInternalResponse.data_response?.transaction?.payment?.qrcode_path);
@@ -412,10 +416,13 @@ async function gerarPixComValorDoCarrinho() {
             throw new Error('Não foi possível obter uma resposta válida da API de PIX.');
         }
 
+        const token = detalhesInternosPix?.data_response?.transaction?.token_transaction;
+
         return {
             valor: total.toFixed(2),
             codigoParaCopiar: codigoPixCopiaECola,
             urlQrCodeImagem: urlQrCodeImagem,
+            transactionToken: token
             // Opcional: Incluir os detalhes internos se precisar deles no frontend
             //detalhesApiCompletos: detalhesInternosPix 
         };
@@ -426,6 +433,31 @@ async function gerarPixComValorDoCarrinho() {
     }
 }
 
+async function comprarEtiquetas() {
+  try {
+    carrinho = await getTotalValorCarrinho()
+    listaDeIds = carrinho.ids
+
+    const response = await axios.post(
+      `${MELHOR_ENVIO_URL}/me/shipment/checkout`,
+      {
+        orders: listaDeIds
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'PinkBella'//USER_AGENT
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao comprar etiquetas:', error.response?.data || error.message);
+    throw new Error('Erro ao realizar o checkout das etiquetas.');
+  }
+}
 
 
 module.exports = {
@@ -434,5 +466,6 @@ module.exports = {
     getTotalValorCarrinho,
     getBalance,
     gerarCodigoPix,
-    gerarPixComValorDoCarrinho
+    gerarPixComValorDoCarrinho,
+    comprarEtiquetas
 };
