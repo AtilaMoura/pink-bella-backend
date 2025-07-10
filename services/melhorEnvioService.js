@@ -1,5 +1,7 @@
 const axios = require('axios');
 const db = require('../database'); 
+const fs = require('fs');
+const path = require('path');
 
 const MELHOR_ENVIO_TOKEN = process.env.MELHOR_ENVIO_TOKEN;
 const MELHOR_ENVIO_URL = process.env.MELHOR_ENVIO_URL;
@@ -262,12 +264,13 @@ async function adicionarEnviosAoCarrinho(purchaseId) {
 
     const price = response.data.price; // valor do frete (string ou number)
     const codigo_envio = response.data.protocol;
+    const codigo_etiqueta = response.data.id
 
     console.log(price, codigo_envio)
 await new Promise((resolve, reject) => { 
   db.run(
-    'UPDATE compras SET valor_frete = ?, codigo_envio = ? WHERE id = ?',
-    [parseFloat(price), codigo_envio, purchaseId],
+    'UPDATE compras SET valor_frete = ?, codigo_envio = ?, codigo_etiqueta =? WHERE id = ?',
+    [parseFloat(price), codigo_envio, codigo_etiqueta, purchaseId],
     function (err) {
       if (err) return reject(err);
       resolve();
@@ -459,6 +462,100 @@ async function comprarEtiquetas() {
   }
 }
 
+async function gerarEtiqueta(labelIds) {
+    if (!Array.isArray(labelIds) || labelIds.length === 0) {
+        throw new Error('Você deve fornecer pelo menos um ID de etiqueta.');
+    }
+
+    try {
+        const response = await axios.post(
+            `${MELHOR_ENVIO_URL}/me/shipment/generate`,
+            { orders: labelIds },
+            {
+                headers: {
+                    Authorization: `Bearer ${MELHOR_ENVIO_TOKEN}`,
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'PinkBella'//USER_AGENT
+                }
+            }
+        );
+
+        return response.data;
+
+    } catch (error) {
+        console.error('Erro ao gerar etiqueta:', error.response?.data || error.message);
+        throw new Error(error.response?.data?.message || 'Erro ao gerar a etiqueta no Melhor Envio.');
+    }
+}
+
+async function imprimirEtiquetasPDF(orderIds) {
+  try {
+    if (!Array.isArray(orderIds)) {
+      throw new Error('orderIds deve ser um array de IDs de ordens');
+    }
+
+    const pdfBuffers = [];
+
+    for (const orderId of orderIds) {
+      const response = await axios.get(
+        `${MELHOR_ENVIO_URL}/me/imprimir/pdf/${orderId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${MELHOR_ENVIO_TOKEN}`,
+            'User-Agent': `Nome da Aplicação (email@example.com)`,
+          },
+        }
+      );
+
+      const pdfResponse = await axios.get(response.data, {
+        responseType: 'arraybuffer',
+      });
+
+      const pdfBuffer = Buffer.from(pdfResponse.data, 'binary');
+      pdfBuffers.push(pdfBuffer);
+
+      // Chamar o método salvarPdf
+      await salvarPdf(orderId, pdfBuffer);
+    }
+
+    return pdfBuffers;
+  } catch (error) {
+    console.error('Erro ao imprimir etiquetas:', error.message);
+    throw new Error('Erro ao imprimir etiquetas.');
+  }
+}
+
+async function salvarPdf(orderId, pdfBuffer) {
+  const pasta = path.join(__dirname, 'pdfs');
+  if (!fs.existsSync(pasta)) {
+    fs.mkdirSync(pasta);
+  }
+  const arquivo = path.join(pasta, `${orderId}.pdf`);
+  fs.writeFileSync(arquivo, pdfBuffer);
+}
+
+async function imprimirEtiquetas(orders, mode = 'private') {
+  try {
+    const response = await axios.post(
+      `${MELHOR_ENVIO_URL}/me/shipment/print`,
+      {
+        orders,
+        mode,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${MELHOR_ENVIO_TOKEN}`,
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao gerar link de impressão:', error.response?.data || error.message);
+    throw new Error('Erro ao gerar link de impressão.');
+  }
+}
 
 module.exports = {
     calcularFrete,
@@ -467,5 +564,8 @@ module.exports = {
     getBalance,
     gerarCodigoPix,
     gerarPixComValorDoCarrinho,
-    comprarEtiquetas
+    comprarEtiquetas,
+    gerarEtiqueta,
+    imprimirEtiquetas,
+    imprimirEtiquetasPDF
 };

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { lookupAddressByCep } = require('../utils/cepUtils')
 const { calcularFrete } = require('../services/melhorEnvioService'); // Importa a função de cálculo de frete
 // const db = require('../database'); // NÃO PRECISAMOS MAIS DO DB AQUI PARA O CÁLCULO DE FRETE
 // const { lookupAddressByCep } = require('../utils/cepUtils'); // NÃO PRECISAMOS MAIS DO CEPUTILS DIRETAMENTE AQUI
@@ -49,11 +50,13 @@ router.post('/calcular', async (req, res) => {
                 };
             })
             .sort((a, b) => a.preco_frete - b.preco_frete);
+            const enderecoDetalhes = await lookupAddressByCep(cepDestino);
             
         res.json({
             // Não precisamos mais retornar o 'endereco_destino' aqui,
             // já que o `cepUtils` não é chamado nesta rota.
             // Se o frontend precisar do endereço, ele faria a chamada ao ViaCEP separadamente ou o cliente já teria.
+            enderecoDestino: enderecoDetalhes,
             opcoes_frete: opcoesFreteFormatadas,
             quantidade_total_de_itens_considerada: quantidadeTotalDeItens // Útil para depuração
         });

@@ -4,6 +4,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path'); 
 const db = require('./database');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./utils/swaggerConfig'); // caminho do config acima
 const produtosRoutes = require('./routes/produtosRoutes'); // Importa as rotas de produtos
 const clientesRoutes = require('./routes/clientesRoutes');
 const comprasRoutes = require('./routes/comprasRoutes');
@@ -30,6 +32,7 @@ app.use('/compras', comprasRoutes);
 app.use('/frete', freteRoutes); 
 app.use('/endereco', addressRoutes);
 app.use('/melhor-envio', melhorEnvioRoutes);
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Inicia o servidor
 app.listen(PORT, () => {

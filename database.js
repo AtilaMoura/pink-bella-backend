@@ -52,8 +52,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 CREATE TABLE IF NOT EXISTS enderecos (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     cliente_id INTEGER NOT NULL, -- A qual cliente este endereço pertence
-                    cep TEXT NOT NULL,
-                    logradouro TEXT NOT NULL,
+                    cep TEXT,
+                    logradouro TEXT,
                     numero TEXT,
                     complemento TEXT,
                     bairro TEXT ,
@@ -74,7 +74,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 CREATE TABLE IF NOT EXISTS clientes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     nome TEXT NOT NULL,
-                    email TEXT UNIQUE NOT NULL,
+                    email TEXT,
                     telefone TEXT,
                     cpf TEXT UNIQUE,
                     data_cadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -102,6 +102,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     servico_frete TEXT,
                     prazo_frete_dias INTEGER,
                     codigo_envio TEXT,
+                    codigo_etiqueta TEXT,
                     codigo_rastreio TEXT,
                     melhor_envio_service_id INTEGER,
                 melhor_envio_label_id TEXT,

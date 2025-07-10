@@ -9,20 +9,37 @@ const db = require('../database');
 async function cadastrarClienteComEndereco(cliente) {
   const { nome, email, telefone, cpf, endereco } = cliente;
 
+  // Validações básicas comentadas, pode ativar se quiser
+  /*
   if (!nome || !email || !endereco?.cep || !endereco?.numero) {
     throw new Error('Nome, email, CEP e número do endereço são obrigatórios.');
   }
   if (!email.includes('@') || !email.includes('.')) {
     throw new Error('Formato de e-mail inválido.');
   }
+  */
 
   const dadosEnderecoCompletos = await lookupAddressByCep(endereco.cep);
-  if (!dadosEnderecoCompletos) {
-    throw new Error('CEP não encontrado ou inválido.');
+
+  if (!dadosEnderecoCompletos && !endereco.logradouro) {
+    throw new Error('CEP não encontrado ou inválido e logradouro manual não informado.');
+  }
+
+  // Usa logradouro do lookup, ou do manual caso não tenha vindo do lookup
+  const logradouroFinal = (dadosEnderecoCompletos && dadosEnderecoCompletos.logradouro)
+    ? dadosEnderecoCompletos.logradouro
+    : (endereco.logradouro || null);
+
+  if (!logradouroFinal) {
+    throw new Error('Logradouro obrigatório. Informe no endereço ou certifique-se que o CEP é válido.');
   }
 
   const enderecoCompletoParaDB = {
-    ...dadosEnderecoCompletos,
+    cep: endereco.cep,
+    logradouro: logradouroFinal,
+    bairro: (dadosEnderecoCompletos && dadosEnderecoCompletos.bairro) || endereco.bairro || null,
+    cidade: (dadosEnderecoCompletos && dadosEnderecoCompletos.cidade) || endereco.cidade || null,
+    estado: (dadosEnderecoCompletos && dadosEnderecoCompletos.estado) || endereco.estado || null,
     numero: endereco.numero,
     complemento: endereco.complemento || null,
     referencia: endereco.referencia || null,
@@ -179,6 +196,8 @@ async function listarTodosClientes() {
 async function atualizarClienteComEndereco(id, dadosAtualizacao) {
   const { nome, email, telefone, cpf, endereco } = dadosAtualizacao;
 
+  console.log(endereco);
+
   if (!nome && !email && !telefone && !cpf && !endereco) {
     throw new Error('Nenhum dado para atualizar fornecido.');
   }
@@ -192,10 +211,35 @@ async function atualizarClienteComEndereco(id, dadosAtualizacao) {
   let dadosEnderecoCompletos = null;
   if (endereco?.cep) {
     dadosEnderecoCompletos = await lookupAddressByCep(endereco.cep);
-    if (!dadosEnderecoCompletos) {
-      throw new Error('CEP do endereço para atualização não encontrado ou inválido.');
+    if (!dadosEnderecoCompletos && !endereco.logradouro) {
+      throw new Error('CEP do endereço para atualização não encontrado ou inválido e logradouro manual não informado.');
     }
   }
+
+  // Define logradouro final
+  const logradouroFinal = (dadosEnderecoCompletos && dadosEnderecoCompletos.logradouro)
+    ? dadosEnderecoCompletos.logradouro
+    : (endereco?.logradouro || null);
+
+  if (endereco && !logradouroFinal) {
+    throw new Error('Logradouro obrigatório. Informe no endereço ou certifique-se que o CEP é válido.');
+  }
+
+  // Prepara endereço completo para atualização
+  const enderecoCompletoParaDB = endereco
+    ? {
+        cep: endereco.cep,
+        logradouro: logradouroFinal,
+        bairro: (dadosEnderecoCompletos && dadosEnderecoCompletos.bairro) || endereco.bairro || null,
+        cidade: (dadosEnderecoCompletos && dadosEnderecoCompletos.cidade) || endereco.cidade || null,
+        estado: (dadosEnderecoCompletos && dadosEnderecoCompletos.estado) || endereco.estado || null,
+        numero: endereco.numero,
+        complemento: endereco.complemento || null,
+        referencia: endereco.referencia || null,
+        tipo_endereco: endereco.tipo_endereco || 'Residencial',
+        is_principal: endereco.is_principal !== undefined ? endereco.is_principal : true
+      }
+    : null;
 
   return new Promise((resolve, reject) => {
     db.serialize(() => {
@@ -224,7 +268,7 @@ async function atualizarClienteComEndereco(id, dadosAtualizacao) {
             });
           }
 
-          if (endereco && dadosEnderecoCompletos) {
+          if (enderecoCompletoParaDB) {
             const clienteExistente = await new Promise((resolve, reject) => {
               db.get('SELECT endereco_principal_id FROM clientes WHERE id = ?', [id], (err, row) => {
                 if (err) return reject(err);
@@ -242,16 +286,16 @@ async function atualizarClienteComEndereco(id, dadosAtualizacao) {
                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                   [
                     id,
-                    dadosEnderecoCompletos.cep,
-                    dadosEnderecoCompletos.logradouro,
-                    endereco.numero,
-                    endereco.complemento || null,
-                    dadosEnderecoCompletos.bairro,
-                    dadosEnderecoCompletos.cidade,
-                    dadosEnderecoCompletos.estado,
-                    endereco.referencia || null,
-                    endereco.tipo_endereco || 'Residencial',
-                    1
+                    enderecoCompletoParaDB.cep,
+                    enderecoCompletoParaDB.logradouro,
+                    enderecoCompletoParaDB.numero,
+                    enderecoCompletoParaDB.complemento,
+                    enderecoCompletoParaDB.bairro,
+                    enderecoCompletoParaDB.cidade,
+                    enderecoCompletoParaDB.estado,
+                    enderecoCompletoParaDB.referencia,
+                    enderecoCompletoParaDB.tipo_endereco,
+                    enderecoCompletoParaDB.is_principal ? 1 : 0
                   ],
                   function (err) {
                     if (err) return reject(err);
@@ -275,16 +319,16 @@ async function atualizarClienteComEndereco(id, dadosAtualizacao) {
                     bairro = ?, cidade = ?, estado = ?, referencia = ?, tipo_endereco = ?, is_principal = ?
                   WHERE id = ? AND cliente_id = ?`,
                   [
-                    dadosEnderecoCompletos.cep,
-                    dadosEnderecoCompletos.logradouro,
-                    endereco.numero,
-                    endereco.complemento || null,
-                    dadosEnderecoCompletos.bairro,
-                    dadosEnderecoCompletos.cidade,
-                    dadosEnderecoCompletos.estado,
-                    endereco.referencia || null,
-                    endereco.tipo_endereco || 'Residencial',
-                    endereco.is_principal !== undefined ? (endereco.is_principal ? 1 : 0) : 1,
+                    enderecoCompletoParaDB.cep,
+                    enderecoCompletoParaDB.logradouro,
+                    enderecoCompletoParaDB.numero,
+                    enderecoCompletoParaDB.complemento,
+                    enderecoCompletoParaDB.bairro,
+                    enderecoCompletoParaDB.cidade,
+                    enderecoCompletoParaDB.estado,
+                    enderecoCompletoParaDB.referencia,
+                    enderecoCompletoParaDB.tipo_endereco,
+                    enderecoCompletoParaDB.is_principal ? 1 : 0,
                     clienteExistente.endereco_principal_id,
                     id
                   ],
@@ -313,7 +357,8 @@ async function atualizarClienteComEndereco(id, dadosAtualizacao) {
   });
 }
 
-function desativarCliente(db, id) {
+
+function desativarCliente(id) {
   return new Promise((resolve, reject) => {
     db.serialize(() => {
       db.run('BEGIN TRANSACTION;', async function (err) {

@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const melhorEnvioService = require('../services/melhorEnvioService');
 
+
 router.post('/adicionar-ao-carrinho', async (req, res) => {
   const { purchaseIds } = req.body;
 
@@ -112,5 +113,43 @@ router.get('/comprar-etiquetas', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+router.post('/imprimir-etiquetas-pdf', async (req, res) => {
+  try {
+    const orderIds = req.body.orderIds;
+
+    if (!Array.isArray(orderIds)) {
+      return res.status(400).json({ error: 'orderIds deve ser um array de IDs de ordens' });
+    }
+
+    const pdfBuffers = await melhorEnvioService.imprimirEtiquetasPDF(orderIds);
+
+    res.setHeader('Content-Disposition', 'attachment; filename=etiquetas.pdf');
+    res.setHeader('Content-Type', 'application/pdf');
+
+    // Se você quiser retornar um único PDF com todas as etiquetas
+    // const mergedPdf = await mergePdfs(pdfBuffers);
+    // res.send(mergedPdf);
+
+    // Se você quiser retornar os PDFs separados
+    res.json({ pdfBuffers });
+  } catch (error) {
+    console.error('Erro ao imprimir etiquetas:', error.message);
+    res.status(500).json({ error: 'Erro ao imprimir etiquetas.' });
+  }
+});
+
+router.post('/imprimir-etiquetas', async (req, res) => {
+  const { orders, mode } = req.body;
+  console.log(orders+" - "+mode)
+  try {
+    const result = await melhorEnvioService.imprimirEtiquetas(orders, mode);
+    res.json(result);
+  } catch (error) {
+    console.error('Erro ao gerar link de impressão:', error.message);
+    res.status(500).json({ error: 'Erro ao gerar link de impressão.' });
+  }
+});
+
 
 module.exports = router;

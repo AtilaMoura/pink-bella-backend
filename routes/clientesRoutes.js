@@ -10,9 +10,17 @@ const {
  } = require('../services/clienteService');
 
 // Endpoint: http://localhost:3000/clientes
+/**
+ * @swagger
+ * /clientes:
+ *   post:
+ *     summary: Cadastra um novo cliente
+ */
+
 router.post('/', async (req, res) => {
   try {
-    const resultado = await cadastrarClienteComEndereco(db, req.body);
+    const resultado = await cadastrarClienteComEndereco(req.body);
+    console.log(resultado)
     res.status(201).json({
       message: 'Cliente e endereço cadastrados com sucesso!',
       cliente: resultado,
@@ -23,6 +31,12 @@ router.post('/', async (req, res) => {
 });
 
 // POST para cadastrar VÁRIOS clientes (recebe lista)
+/**
+ * @swagger
+ * /clientes/lista:
+ *   post:
+ *     summary: Cadastra múltiplos clientes em lote
+ */
 router.post('/lista', async (req, res) => {
   const clientes = req.body;
 
@@ -36,7 +50,7 @@ router.post('/lista', async (req, res) => {
 
   for (const cliente of clientes) {
     try {
-      const resultado = await cadastrarClienteComEndereco(db, cliente);
+      const resultado = await cadastrarClienteComEndereco(cliente);
       resultados.push({ cliente: cliente.nome, sucesso: true, dados: resultado });
     } catch (error) {
       resultados.push({ cliente: cliente.nome, sucesso: false, erro: error.message });
@@ -47,6 +61,23 @@ router.post('/lista', async (req, res) => {
 });
 
 // Endpoint: http://localhost:3000/clientes/:id
+/**
+ * @swagger
+ * /clientes/{id}:
+ *   get:
+ *     summary: Busca cliente pelo ID
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Cliente encontrado
+ *       404:
+ *         description: Cliente não encontrado
+ */
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -65,6 +96,17 @@ router.get('/:id', async (req, res) => {
 });
 
 // Endpoint: http://localhost:3000/clientes
+/**
+ * @swagger
+ * /clientes:
+ *   get:
+ *     summary: Lista todos os clientes
+ *     responses:
+ *       200:
+ *         description: Lista de clientes retornada com sucesso
+ *       500:
+ *         description: Erro ao listar clientes
+ */
 router.get('/', async (req, res) => {
   try {
     const clientes = await listarTodosClientes();
@@ -76,6 +118,23 @@ router.get('/', async (req, res) => {
 });
 
 // Endpoint: http://localhost:3000/clientes/:id
+/**
+ * @swagger
+ * /clientes/{id}:
+ *   put:
+ *     summary: Atualiza cliente
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: {}
+ *     responses:
+ *       200: { description: OK }
+ */
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -88,6 +147,17 @@ router.put('/:id', async (req, res) => {
 });
 
 // Endpoint: http://localhost:3000/clientes/:id
+/**
+ * @swagger
+ * /clientes/{id}:
+ *   delete:
+ *     summary: Ativa/desativa cliente
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ */
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
 
