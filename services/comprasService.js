@@ -24,6 +24,7 @@ async function getAllComprasFormatted() {
                 c.codigo_rastreio,
                 c.codigo_etiqueta,
                 c.melhor_envio_service_id,
+                c.codigo_etiqueta,
                 c.peso_pacote,
                 c.altura_pacote,
                 c.largura_pacote,
@@ -90,6 +91,7 @@ async function getAllComprasFormatted() {
             codigo_rastreio: compra.codigo_rastreio,
             codigo_etiqueta: compra.codigo_etiqueta,
             melhor_envio_service_id: compra.melhor_envio_service_id,
+            codigo_etiqueta: compra.codigo_etiqueta,
             pacote: {
                 peso: compra.peso_pacote,
                 altura: compra.altura_pacote,

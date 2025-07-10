@@ -25,7 +25,7 @@ function formatarClienteComEndereco(cliente) {
   };
 }
 
-async function getFormattedCompraDetails(compraId) {
+async function getFormattedCompraDetails(db, compraId) {
         // 1. Buscar detalhes da compra, cliente e endereço de entrega
         const compra = await new Promise((resolve, reject) => {
             db.get(

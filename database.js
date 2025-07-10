@@ -28,6 +28,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
             //db.run("DROP TABLE IF EXISTS enderecos;");
             //db.run("DROP TABLE IF EXISTS produtos;");
             
+            
             // 1. Cria a tabela 'produtos' (não tem FKs para outras tabelas aqui)
             db.run(`
                 CREATE TABLE IF NOT EXISTS produtos (
@@ -104,6 +105,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     codigo_envio TEXT,
                     codigo_etiqueta TEXT,
                     codigo_rastreio TEXT,
+                    url_melhor_envio TEXT,
                     melhor_envio_service_id INTEGER,
                 melhor_envio_label_id TEXT,
                 last_webhook_event_id TEXT,
@@ -118,6 +120,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 if (err) console.error('Erro ao criar tabela compras:', err.message);
                 else console.log('Tabela compras verificada/criada.');
             });
+
+            db.run(`
+  ALTER TABLE compras ADD COLUMN url_melhor_envio TEXT;
+`, (err) => {
+  if (err) console.error('Erro ao adicionar coluna url_melhor_envio:', err.message);
+  else console.log('Coluna url_melhor_envio adicionada com sucesso!');
+});
+
+            
 
             // 5. Cria a tabela 'itens_compra' (referencia compras e produtos)
             // Certifique-se de que esta tabela também seja criada, pois ela completa o ciclo da compra

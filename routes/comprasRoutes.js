@@ -297,7 +297,7 @@ router.get('/', async (req, res) => {
 
                         // --- NOVO BLOCO: Buscar e formatar os detalhes completos da compra recém-criada ---
                         try {
-                            const compraFormatadaParaRetorno = await getFormattedCompraDetails(compraId);
+                            const compraFormatadaParaRetorno = await getFormattedCompraDetails(db, compraId);
 
                             if (!compraFormatadaParaRetorno) {
                                 console.error('Erro: Compra recém-criada não encontrada ao tentar formatar detalhes.');

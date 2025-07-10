@@ -114,6 +114,17 @@ router.get('/comprar-etiquetas', async (req, res) => {
   }
 });
 
+router.post('/etiqueta/gerar', async (req, res) => {
+  try {
+    const labelIds = req.body.labelIds;
+    const resultado = await melhorEnvioService.gerarEtiqueta(labelIds);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Erro ao gerar etiqueta:', error.message);
+    res.status(500).json({ error: 'Erro ao gerar etiqueta.' });
+  }
+});
+
 router.post('/imprimir-etiquetas-pdf', async (req, res) => {
   try {
     const orderIds = req.body.orderIds;

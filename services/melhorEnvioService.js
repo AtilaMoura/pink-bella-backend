@@ -266,7 +266,7 @@ async function adicionarEnviosAoCarrinho(purchaseId) {
     const codigo_envio = response.data.protocol;
     const codigo_etiqueta = response.data.id
 
-    console.log(price, codigo_envio)
+    console.log(price, codigo_envio, +"dado completo ---> "+response.data)
 await new Promise((resolve, reject) => { 
   db.run(
     'UPDATE compras SET valor_frete = ?, codigo_envio = ?, codigo_etiqueta =? WHERE id = ?',
@@ -549,11 +549,53 @@ async function imprimirEtiquetas(orders, mode = 'private') {
         },
       }
     );
+    
+    orders.forEach(compraId => {
+      salvarUrlMelhorEnvio(compraId, response.data.url);
+    });
+    
+    console.log(response.data.url)
 
     return response.data;
   } catch (error) {
     console.error('Erro ao gerar link de impressão:', error.response?.data || error.message);
     throw new Error('Erro ao gerar link de impressão.');
+  }
+}
+
+async function salvarUrlMelhorEnvio(compraId, url) {
+  console.log("codigo_etiqueta =", compraId, "url =", url)
+  try {
+    const compra = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT * FROM compras WHERE codigo_etiqueta = ?',
+        [compraId],
+        function(err, row) {
+          if (err) return reject(err);
+          resolve(row);
+        }
+      );
+    });
+
+    if (!compra) {
+      throw new Error('Compra não encontrada');
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE compras SET url_melhor_envio = ? WHERE codigo_etiqueta = ?',
+        [url, compraId],
+        function(err) {
+          if (err) return reject(err);
+          resolve(this.changes);
+        }
+      );
+    });
+
+    return { message: 'URL salva com sucesso!' };
+  } catch (error) {
+    console.error('Erro ao salvar URL do Melhor Envio:', error.message);
+    throw error;
   }
 }
 
