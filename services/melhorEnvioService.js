@@ -2,6 +2,8 @@ const axios = require('axios');
 const db = require('../database'); 
 const fs = require('fs');
 const path = require('path');
+const comprasService = require('../services/comprasService'); 
+const melhorEnvioService = require('../services/melhorEnvioService');
 
 const MELHOR_ENVIO_TOKEN = process.env.MELHOR_ENVIO_TOKEN;
 const MELHOR_ENVIO_URL = process.env.MELHOR_ENVIO_URL;
@@ -290,6 +292,64 @@ await new Promise((resolve, reject) => {
   }
 }
 
+async function verificarStatusCompra(compraId, status) {
+  try {
+    const compra = await new Promise((resolve, reject) => {
+      db.get('SELECT status_compra FROM compras WHERE id = ?', [compraId], (err, row) => {
+        if (err) return reject(err);
+        resolve(row);
+      });
+    });
+
+    if (!compra) {
+      throw new Error('Compra não encontrada.');
+    }
+
+    if (compra === status) {
+      throw new Error('Compra já esta com o status '+ status);
+    }
+
+
+    switch (status) {
+      case 'Pago':
+        // Chamar a função para adicionar ao carrinho do Melhor Envio
+        await adicionarEnviosAoCarrinho(compraId);
+        await comprasService.atualizarStatusCompra(compraId, 'Pagar Etiqueta');
+        break;
+      case 'Pagar Etiqueta':
+        // Chamar a função para adicionar ao carrinho do Melhor Envio
+        await adicionarEnviosAoCarrinho(compraId);
+        await comprasService.atualizarStatusCompra(compraId, 'Aguardando Etiqueta');
+        break;
+      case 'pending':
+          await comprasService.atualizarStatusCompra(compraId, 'Pagar Etiqueta'); 
+          break;
+      case 'paid':
+          await comprasService.atualizarStatusCompra(compraId, 'Pago (Aguardando Etiqueta)'); 
+          break;
+      case 'released':
+      case 'generated':
+          await comprasService.atualizarStatusCompra(compraId, 'Etiqueta PDF Gerada'); 
+          break;
+      case 'posted':
+          await comprasService.atualizarStatusCompra(compraId, 'Postado'); 
+          break;
+      case 'delivered':
+          await comprasService.atualizarStatusCompra(compraId, 'Entregue'); 
+          break;
+      case 'canceled':
+          await comprasService.atualizarStatusCompra(compraId, 'Cancelado'); 
+          break;
+      // Adicionar mais casos para outros status
+      default:
+        console.log(`Status ${status} não tem ação definida.`);
+    }
+  } catch (error) {
+    console.error('Erro ao verificar status da compra:', error.message);
+    throw error;
+  }
+}
+
 async function getTotalValorCarrinho() {
   try {
     const response = await axios.get(`${MELHOR_ENVIO_URL}/me/cart`, {
@@ -436,15 +496,16 @@ async function gerarPixComValorDoCarrinho() {
     }
 }
 
-async function comprarEtiquetas() {
+async function comprarEtiquetas(listaDeIds) {
   try {
     carrinho = await getTotalValorCarrinho()
-    listaDeIds = carrinho.ids
+    labelIds = carrinho.ids
+    console.log(labelIds)
 
     const response = await axios.post(
       `${MELHOR_ENVIO_URL}/me/shipment/checkout`,
       {
-        orders: listaDeIds
+        orders: labelIds
       },
       {
         headers: {
@@ -455,6 +516,9 @@ async function comprarEtiquetas() {
         }
       }
     );
+
+    await comprasService.atualizarStatusPorCodigoEtiqueta(labelIds, 'Aguardando Etiqueta');
+
     return response.data;
   } catch (error) {
     console.error('Erro ao comprar etiquetas:', error.response?.data || error.message);
@@ -480,6 +544,8 @@ async function gerarEtiqueta(labelIds) {
                 }
             }
         );
+
+        await comprasService.atualizarStatusPorCodigoEtiqueta(labelIds, 'Etiqueta Gerada');
 
         return response.data;
 
@@ -599,6 +665,128 @@ async function salvarUrlMelhorEnvio(compraId, url) {
   }
 }
 
+//Listar de etique ainda não esta funcionando
+async function listarEtiquetas(status = '', page = 1, limit = 10) {
+    try {
+      const response = await axios.get(`${MELHOR_ENVIO_URL}/me/orders`, {
+        headers: {
+          Authorization: `Bearer ${MELHOR_ENVIO_TOKEN}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'PinkBellaStore/1.0'
+        },
+        params: {
+          //status, // Ex: 'paid', 'pending', 'shipped', etc.
+          page,
+          limit
+        }
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao listar etiquetas:', error?.response?.data || error.message);
+      throw error;
+    }
+  }
+
+
+const rastrearEnvios = async (orders) => {
+  const headers = {
+    Authorization: `Bearer ${MELHOR_ENVIO_TOKEN}`,
+    'User-Agent': `Nome da Aplicação (email@example.com)`,
+    'Content-Type': 'application/json',
+  };
+
+  const body = {
+    orders: orders,
+  };
+
+  try {
+    const response = await axios.post(`${MELHOR_ENVIO_URL}/me/shipment/tracking`, body, { headers });
+    return response.data;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+};
+
+async function atualizarCodigoRastreio(compraId, codigoRastreioBruto) {
+  console.log(compraId, codigoRastreioBruto)
+  try {
+    // Busca o código atual e a transportadora
+    const dadosCompra = await new Promise((resolve, reject) => {
+      db.get('SELECT codigo_rastreio, transportadora FROM compras WHERE id = ?', [compraId], (err, row) => {
+        if (err) return reject(err);
+        resolve(row);
+      });
+    });
+
+    if (!dadosCompra) throw new Error('Compra não encontrada.');
+
+    // Se já existe um código, não atualiza
+    if (dadosCompra.codigo_rastreio) {
+      console.log(`Compra ${compraId} já possui código de rastreio.`);
+      return;
+    }
+
+    const transportadora = (dadosCompra.transportadora || 'correios').toLowerCase().replace(/\s/g, '');
+    const urlRastreio = `https://app.melhorrastreio.com.br/app/${transportadora}/${codigoRastreioBruto}`;
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE compras SET codigo_rastreio = ? WHERE id = ?',
+        [urlRastreio, compraId],
+        (err) => {
+          if (err) return reject(err);
+          resolve();
+        }
+      );
+    });
+
+    console.log(`Código de rastreio atualizado para a compra ${compraId}: ${urlRastreio}`);
+  } catch (error) {
+    console.error(`Erro ao atualizar código de rastreio da compra ${compraId}:`, error.message);
+    throw error;
+  }
+}
+
+async function atualizarStatusComprasMelhorEnvio() {
+  try {
+    const compras = await comprasService.buscarComprasComEtiquetaPendente(); // Passo 2: já existe
+
+    console.log(compras)
+
+    if (compras.length === 0) {
+      console.log('Nenhuma compra pendente de rastreamento.');
+      return;
+    }
+
+    const labelIds = compras.map((c) => c.codigo_etiqueta);
+    const dadosRastreamento = await rastrearEnvios(labelIds); // Passo 3: já existe
+
+    for (const [labelId, dados] of Object.entries(dadosRastreamento)) {
+      const statusMelhorEnvio = dados.status;
+      const codigoRastreio = dados.tracking || dados.melhorenvio_tracking;
+
+      const compra = compras.find((c) => c.codigo_etiqueta === labelId);
+      if (!compra) continue;
+
+      // Atualiza o código de rastreio se disponível
+      if (codigoRastreio) {
+        await atualizarCodigoRastreio(compra.id, codigoRastreio);
+      }
+
+      // Atualiza o status usando o método que já trata os casos
+      await verificarStatusCompra(compra.id, statusMelhorEnvio);
+    }
+
+    console.log('Atualização de status concluída.');
+
+  } catch (error) {
+    console.error('Erro ao atualizar status das compras:', error.message);
+  }
+}
+
 module.exports = {
     calcularFrete,
     adicionarEnviosAoCarrinho,
@@ -609,5 +797,9 @@ module.exports = {
     comprarEtiquetas,
     gerarEtiqueta,
     imprimirEtiquetas,
-    imprimirEtiquetasPDF
+    imprimirEtiquetasPDF,
+    listarEtiquetas,
+    rastrearEnvios,
+    verificarStatusCompra,
+    atualizarStatusComprasMelhorEnvio
 };

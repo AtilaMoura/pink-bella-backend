@@ -6,84 +6,7 @@
     const { getFormattedCompraDetails } = require('../utils/formatadores')
     const comprasService = require('../services/comprasService'); // Certifique-se de importar
 
-
-    async function updateOrderStatus(compraId, status) {
-    const allowedStatuses = [
-        'Pendente',
-        'Pago',
-        'Pagamento Recusado',
-        'Cancelado',
-        'Aguardando Etiqueta',
-        'Etiqueta Gerada',
-        'Pronto para Envio',
-        'Em Trânsito',
-        'Entregue',
-        'Extraviado',
-        'Devolvido'
-    ];
-
-    if (!allowedStatuses.includes(status)) {
-        throw new Error(`Status "${status}" não é permitido.`);
-    }
-
-    try {
-        const compraExistente = await new Promise((resolve, reject) => {
-        db.get('SELECT id, status_compra FROM compras WHERE id = ?', [compraId], (err, row) => {
-            if (err) return reject(err);
-            resolve(row);
-        });
-        });
-
-        if (!compraExistente) {
-        throw new Error('Compra não encontrada.');
-        }
-
-        const result = await new Promise((resolve, reject) => {
-        db.run(
-            'UPDATE compras SET status_compra = ? WHERE id = ?',
-            [status, compraId],
-            function (err) {
-            if (err) return reject(err);
-            resolve(this.changes);
-            }
-        );
-        });
-
-        if (result === 0) {
-        throw new Error('Status não atualizado. Já estava com esse valor ou ID inválido.');
-        }
-
-        let carrinhoResultado = null;
-
-        if (status === 'Pago') {
-        try {
-            carrinhoResultado = await melhorEnvioService.adicionarEnviosAoCarrinho(compraId); // <--- Você vai criar essa função
-            // Se quiser já atualizar o status para "Aguardando Etiqueta":
-            await updateOrderStatus(compraId, 'Aguardando Etiqueta');
-        } catch (e) {
-            console.warn(`⚠️ Erro ao adicionar ao carrinho do Melhor Envio para compra ${compraId}:`, e.message);
-        }
-        }
-
-        const compraAtualizada = await getFormattedCompraDetails(compraId);
-
-        if (!compraAtualizada) {
-        throw new Error('Erro ao buscar detalhes da compra atualizada.');
-        }
-
-        return {
-        message: `Status da compra ${compraId} atualizado para "${status}" com sucesso.`,
-        compra: compraAtualizada,
-        carrinho: carrinhoResultado
-        };
-
-    } catch (error) {
-        console.error('Erro ao atualizar status da compra:', error.message);
-        throw error;
-    }
-    }
-
-    
+  
 router.get('/', async (req, res) => {
     try {
         const todasCompras = await comprasService.getAllComprasFormatted();
@@ -333,7 +256,7 @@ router.get('/', async (req, res) => {
         const { id } = req.params;
 
         try {
-            const compraFormatada = await getFormattedCompraDetails(id);
+            const compraFormatada = await getFormattedCompraDetails(db, id);
 
             if (!compraFormatada) {
                 return res.status(404).json({ error: 'Compra não encontrada.' });
@@ -354,8 +277,8 @@ router.get('/', async (req, res) => {
         
 
         try {
-            const pedidoAtualizado = await updateOrderStatus(compraId, status);
-
+            //const pedidoAtualizado = await updateOrderStatus(compraId, status); verificarStatusCompra
+            const pedidoAtualizado = await melhorEnvioService.verificarStatusCompra(compraId, status);
             res.json(pedidoAtualizado);
 
         } catch (error) {
@@ -363,5 +286,7 @@ router.get('/', async (req, res) => {
             res.status(500).json({ error: 'Erro interno do servidor ao atualizar o status.' });
         }
     });
+
+    
 
     module.exports = router;

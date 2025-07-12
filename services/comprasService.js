@@ -1,13 +1,14 @@
 // services/comprasService.js
 
 const db = require('../database'); // Assumindo que seu arquivo de banco de dados está um nível acima
-
+const melhorEnvioService = require('../services/melhorEnvioService');
 /**
  * Busca e formata os detalhes completos de TODAS as compras.
  * Realiza JOINs para incluir informações de clientes, endereços e itens de compra.
  * @returns {Promise<Array<object>>} Uma Promise que resolve para um array de objetos de compras formatadas.
  */
 async function getAllComprasFormatted() {
+
     // 1. Buscar todas as compras com JOINs para cliente e endereço
     const comprasRaw = await new Promise((resolve, reject) => {
         db.all(
@@ -139,6 +140,60 @@ async function getAllComprasFormatted() {
     return todasComprasFormatadas;
 }
 
+async function atualizarStatusCompra(compraId, status) {
+  try {
+    await new Promise((resolve, reject) => {
+      db.run('UPDATE compras SET status_compra = ? WHERE id = ?', [status, compraId], (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar status da compra:', error.message);
+    throw error;
+  }
+}
+
+
+async function atualizarStatusPorCodigoEtiqueta(labelIds, novoStatus) {
+  if (!Array.isArray(labelIds) || labelIds.length === 0) {
+    throw new Error('Lista de etiquetas inválida.');
+  }
+
+  for (const labelId of labelIds) {
+    const compra = await new Promise((resolve, reject) => {
+      db.get('SELECT id FROM compras WHERE codigo_etiqueta = ?', [labelId], (err, row) => {
+        if (err) return reject(err);
+        resolve(row);
+      });
+    });
+
+    if (compra && compra.id) {
+      await atualizarStatusCompra(compra.id, novoStatus);
+    } else {
+      console.warn(`⚠️ Compra não encontrada para etiqueta: ${labelId}`);
+    }
+  }
+}
+
+async function buscarComprasComEtiquetaPendente() {
+  return new Promise((resolve, reject) => {
+    db.all(`
+      SELECT id, codigo_etiqueta
+      FROM compras
+      WHERE status_compra IN ('Etiqueta Gerada', 'Pagar Etiqueta', 'Pago', 'Etiqueta PDF Gerada', 'Postado', 'Aguardando Etiqueta')
+        AND codigo_etiqueta IS NOT NULL
+    `, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows);
+    });
+  });
+}
+
 module.exports = {
-    getAllComprasFormatted
+    getAllComprasFormatted,
+    atualizarStatusCompra,
+    atualizarStatusPorCodigoEtiqueta,
+    buscarComprasComEtiquetaPendente
+
 };

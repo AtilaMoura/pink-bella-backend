@@ -163,4 +163,36 @@ router.post('/imprimir-etiquetas', async (req, res) => {
 });
 
 
+router.get('/etiquetas', async (req, res) => {
+  try {
+    const etiquetas = await melhorEnvioService.listarEtiquetas();
+    res.json(etiquetas);
+  } catch (error) {
+    console.error('Erro ao listar etiquetas:', error.message);
+    res.status(500).json({ message: 'Erro ao listar etiquetas.' });
+  }
+});
+
+router.post('/rastrear-envios', async (req, res) => {
+  try {
+    const orders = req.body.orders;
+    const resultado = await melhorEnvioService.rastrearEnvios(orders);
+    res.json(resultado);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erro ao rastrear envios' });
+  }
+});
+
+router.get('/rastreios/atualizar', async (req, res) => {
+  try {
+    const resultado = await melhorEnvioService.atualizarStatusComprasMelhorEnvio();
+    res.json({ sucesso: true, resultado });
+  } catch (error) {
+    console.error('Erro ao atualizar rastreios:', error.message);
+    res.status(500).json({ erro: 'Erro ao atualizar rastreios.' });
+  }
+    });
+
+
 module.exports = router;
