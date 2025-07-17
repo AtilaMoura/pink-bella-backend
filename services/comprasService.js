@@ -26,6 +26,7 @@ async function getAllComprasFormatted() {
                 c.codigo_etiqueta,
                 c.melhor_envio_service_id,
                 c.codigo_etiqueta,
+                c.url_melhor_envio,
                 c.peso_pacote,
                 c.altura_pacote,
                 c.largura_pacote,
@@ -91,6 +92,7 @@ async function getAllComprasFormatted() {
             status_compra: compra.status_compra,
             codigo_rastreio: compra.codigo_rastreio,
             codigo_etiqueta: compra.codigo_etiqueta,
+            url_melhor_envio: compra.url_melhor_envio,
             melhor_envio_service_id: compra.melhor_envio_service_id,
             codigo_etiqueta: compra.codigo_etiqueta,
             pacote: {

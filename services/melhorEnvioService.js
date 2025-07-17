@@ -263,7 +263,7 @@ async function adicionarEnviosAoCarrinho(purchaseId) {
         'Accept': 'application/json'
       }
     });
-
+    
     const price = response.data.price; // valor do frete (string ou number)
     const codigo_envio = response.data.protocol;
     const codigo_etiqueta = response.data.id
@@ -312,6 +312,7 @@ async function verificarStatusCompra(compraId, status) {
 
     switch (status) {
       case 'Pago':
+        console.log('entrei no Pago!')
         // Chamar a função para adicionar ao carrinho do Melhor Envio
         await adicionarEnviosAoCarrinho(compraId);
         await comprasService.atualizarStatusCompra(compraId, 'Pagar Etiqueta');
@@ -321,15 +322,23 @@ async function verificarStatusCompra(compraId, status) {
         await adicionarEnviosAoCarrinho(compraId);
         await comprasService.atualizarStatusCompra(compraId, 'Aguardando Etiqueta');
         break;
-      case 'pending':
-          await comprasService.atualizarStatusCompra(compraId, 'Pagar Etiqueta'); 
-          break;
+      //case 'pending':
+      //    console.log('entrei no pending!')
+      //    await comprasService.atualizarStatusCompra(compraId, 'Pagar Etiqueta'); 
+      //    break;
       case 'paid':
           await comprasService.atualizarStatusCompra(compraId, 'Pago (Aguardando Etiqueta)'); 
           break;
       case 'released':
-      case 'generated':
+          console.log('entrei no released!')
           await comprasService.atualizarStatusCompra(compraId, 'Etiqueta PDF Gerada'); 
+          break;
+      case 'generated':
+          console.log('entrei no generated!')
+          await comprasService.atualizarStatusCompra(compraId, 'Etiqueta PDF Gerada'); 
+          break;
+      case 'received':
+          await comprasService.atualizarStatusCompra(compraId, 'Processado'); 
           break;
       case 'posted':
           await comprasService.atualizarStatusCompra(compraId, 'Postado'); 
@@ -545,7 +554,7 @@ async function gerarEtiqueta(labelIds) {
             }
         );
 
-        await comprasService.atualizarStatusPorCodigoEtiqueta(labelIds, 'Etiqueta Gerada');
+        await comprasService.atualizarStatusPorCodigoEtiqueta(labelIds, 'Etiqueta PDF Gerada');
 
         return response.data;
 

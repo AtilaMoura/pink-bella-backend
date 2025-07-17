@@ -40,6 +40,7 @@ async function getFormattedCompraDetails(db, compraId) {
                     c.prazo_frete_dias,
                     c.codigo_rastreio,
                     c.codigo_etiqueta,
+                    c.url_melhor_envio,
                     cl.id AS cliente_id,
                     cl.nome AS cliente_nome,
                     cl.email AS cliente_email,
@@ -99,6 +100,7 @@ async function getFormattedCompraDetails(db, compraId) {
             status_compra: compra.status_compra,
             codigo_rastreio: compra.codigo_rastreio,
             codigo_etiqueta: compra.codigo_etiqueta,
+            url_melhor_envio: compra.url_melhor_envio,
             frete: {
                 valor: compra.valor_frete,
                 transportadora: compra.transportadora,

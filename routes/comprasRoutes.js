@@ -274,7 +274,7 @@ router.get('/', async (req, res) => {
         const compraId = req.params.id;
         const { status } = req.body;
 
-        
+        console.log('entrei no /:id/status!')
 
         try {
             //const pedidoAtualizado = await updateOrderStatus(compraId, status); verificarStatusCompra

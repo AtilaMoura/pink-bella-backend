@@ -186,6 +186,7 @@ router.post('/rastrear-envios', async (req, res) => {
 
 router.get('/rastreios/atualizar', async (req, res) => {
   try {
+    console.log('entrei no /rastreios/atualizar!')
     const resultado = await melhorEnvioService.atualizarStatusComprasMelhorEnvio();
     res.json({ sucesso: true, resultado });
   } catch (error) {
