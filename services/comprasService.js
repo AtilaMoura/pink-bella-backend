@@ -183,7 +183,7 @@ async function buscarComprasComEtiquetaPendente() {
     db.all(`
       SELECT id, codigo_etiqueta
       FROM compras
-      WHERE status_compra IN ('Etiqueta Gerada', 'Pagar Etiqueta', 'Pago', 'Etiqueta PDF Gerada', 'Postado', 'Aguardando Etiqueta')
+      WHERE status_compra IN ('Etiqueta Gerada', 'Pagar Etiqueta', 'Pago', 'Etiqueta PDF Gerada', 'Postado', 'Aguardando Etiqueta', 'Processado')
         AND codigo_etiqueta IS NOT NULL
     `, (err, rows) => {
       if (err) return reject(err);
@@ -192,10 +192,31 @@ async function buscarComprasComEtiquetaPendente() {
   });
 }
 
+async function editarCompra(id, novosDados) {
+  return new Promise((resolve, reject) => {
+    const campos = Object.keys(novosDados)
+      .map(campo => `${campo} = ?`)
+      .join(', ');
+
+    const valores = Object.values(novosDados);
+
+    const sql = `UPDATE compras SET ${campos} WHERE id = ?`;
+
+    db.run(sql, [...valores, id], function (err) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({ id, alteradas: this.changes });
+      }
+    });
+  });
+}
+
 module.exports = {
     getAllComprasFormatted,
     atualizarStatusCompra,
     atualizarStatusPorCodigoEtiqueta,
-    buscarComprasComEtiquetaPendente
+    buscarComprasComEtiquetaPendente,
+    editarCompra
 
 };

@@ -337,6 +337,10 @@ async function verificarStatusCompra(compraId, status) {
           console.log('entrei no generated!')
           await comprasService.atualizarStatusCompra(compraId, 'Etiqueta PDF Gerada'); 
           break;
+      case 'pending':
+          console.log('entrei no pending!')
+          await comprasService.atualizarStatusCompra(compraId, 'Etiqueta PDF Gerada'); 
+          break;
       case 'received':
           await comprasService.atualizarStatusCompra(compraId, 'Processado'); 
           break;
@@ -347,6 +351,9 @@ async function verificarStatusCompra(compraId, status) {
           await comprasService.atualizarStatusCompra(compraId, 'Entregue'); 
           break;
       case 'canceled':
+          await comprasService.atualizarStatusCompra(compraId, 'Cancelado'); 
+          break;
+      case 'Cancelada':
           await comprasService.atualizarStatusCompra(compraId, 'Cancelado'); 
           break;
       // Adicionar mais casos para outros status
@@ -782,6 +789,7 @@ async function atualizarStatusComprasMelhorEnvio() {
 
       // Atualiza o código de rastreio se disponível
       if (codigoRastreio) {
+        
         await atualizarCodigoRastreio(compra.id, codigoRastreio);
       }
 

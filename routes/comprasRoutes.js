@@ -287,6 +287,18 @@ router.get('/', async (req, res) => {
         }
     });
 
+router.put('/:id', async (req, res) => {
+  const { id } = req.params;
+  const novosDados = req.body;
+
+  try {
+    const resultado = await comprasService.editarCompra(id, novosDados);
+    res.json({ sucesso: true, dados: resultado });
+  } catch (erro) {
+    console.error(erro);
+    res.status(500).json({ sucesso: false, erro: 'Erro ao editar compra.' });
+  }
+});
     
 
     module.exports = router;
