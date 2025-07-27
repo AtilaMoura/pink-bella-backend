@@ -193,24 +193,71 @@ async function buscarComprasComEtiquetaPendente() {
 }
 
 async function editarCompra(id, novosDados) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
+    const itens = novosDados.itens || [];
+    delete novosDados.itens;
+
     const campos = Object.keys(novosDados)
       .map(campo => `${campo} = ?`)
       .join(', ');
-
     const valores = Object.values(novosDados);
 
-    const sql = `UPDATE compras SET ${campos} WHERE id = ?`;
+    const sqlCompra = `UPDATE compras SET ${campos} WHERE id = ?`;
 
-    db.run(sql, [...valores, id], function (err) {
-      if (err) {
-        reject(err);
-      } else {
+    db.run(sqlCompra, [...valores, id], async function (err) {
+      if (err) return reject(err);
+
+      try {
+        // Atualizar/Inserir/excluir itens_compra
+        await atualizarItensCompra(id, itens);
         resolve({ id, alteradas: this.changes });
+      } catch (errItens) {
+        reject(errItens);
       }
     });
   });
 }
+
+async function atualizarItensCompra(compraId, itens) {
+  return new Promise((resolve, reject) => {
+    db.serialize(() => {
+      // Exemplo simplificado, sem transação ainda:
+      // 1. Buscar todos os itens atuais dessa compra
+      db.all('SELECT id FROM itens_compra WHERE compra_id = ?', [compraId], (err, rows) => {
+        if (err) return reject(err);
+
+        const idsAtuais = rows.map(r => r.id);
+        const idsRecebidos = itens.filter(i => i.id).map(i => i.id);
+
+        // 2. Excluir itens que não vieram no array (opcional)
+        const idsParaExcluir = idsAtuais.filter(id => !idsRecebidos.includes(id));
+        idsParaExcluir.forEach(idExcluir => {
+          db.run('DELETE FROM itens_compra WHERE id = ?', [idExcluir]);
+        });
+
+        // 3. Atualizar e inserir
+        itens.forEach(item => {
+          if (item.id) {
+            // Atualizar
+            db.run(
+              `UPDATE itens_compra SET produto_id = ?, quantidade = ?, preco_unitario_no_momento_da_compra = ? WHERE id = ?`,
+              [item.produto_id, item.quantidade, item.preco_unitario_no_momento_da_compra, item.id]
+            );
+          } else {
+            // Inserir
+            db.run(
+              `INSERT INTO itens_compra (compra_id, produto_id, quantidade, preco_unitario_no_momento_da_compra) VALUES (?, ?, ?, ?)`,
+              [compraId, item.produto_id, item.quantidade, item.preco_unitario_no_momento_da_compra]
+            );
+          }
+        });
+
+        resolve();
+      });
+    });
+  });
+}
+
 
 module.exports = {
     getAllComprasFormatted,

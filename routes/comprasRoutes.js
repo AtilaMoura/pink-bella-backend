@@ -290,6 +290,7 @@ router.get('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const novosDados = req.body;
+  console.log("🔍 JSON recebido no PUT /compras/:id:", novosDados);
 
   try {
     const resultado = await comprasService.editarCompra(id, novosDados);
