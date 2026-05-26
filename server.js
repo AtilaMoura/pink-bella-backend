@@ -1,40 +1,8 @@
-require('dotenv').config(); // Carrega as variáveis de ambiente do arquivo .env
+require('./database'); // inicializa o banco antes de aceitar requisições
+const app = require('./app');
 
-const express = require('express');
-const cors = require('cors');
-const path = require('path'); 
-const db = require('./database');
-const swaggerUi = require('swagger-ui-express');
-const swaggerSpec = require('./utils/swaggerConfig'); // caminho do config acima
-const produtosRoutes = require('./routes/produtosRoutes'); // Importa as rotas de produtos
-const clientesRoutes = require('./routes/clientesRoutes');
-const comprasRoutes = require('./routes/comprasRoutes');
-const freteRoutes = require('./routes/freteRoutes');
-const addressRoutes = require('./routes/addressRoutes');
-const melhorEnvioRoutes = require('./routes/melhorEnvioRoutes'); 
-
-const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middlewares  
-app.use(cors());
-app.use(express.json());
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Rota de teste
-app.get('/', (req, res) => {
-    res.send('Backend Pink Bella funcionando! Agora sim ');
-});
-app.use('/produtos', produtosRoutes);
-app.use('/clientes', clientesRoutes);
-app.use('/compras', comprasRoutes);
-app.use('/frete', freteRoutes); 
-app.use('/endereco', addressRoutes);
-app.use('/melhor-envio', melhorEnvioRoutes);
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-// Inicia o servidor
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
     console.log(`Acesse: http://localhost:${PORT}`);

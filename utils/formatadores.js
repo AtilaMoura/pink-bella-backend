@@ -25,7 +25,79 @@ function formatarClienteComEndereco(cliente) {
   };
 }
 
+async function getCompraDetalhadaComHistorico(db, compraId) {
+    const compra = await getFormattedCompraDetails(db, compraId);
+    if (!compra) return null;
+
+    const clienteId = compra.cliente.id;
+
+    // Buscar compras anteriores
+    const comprasAnteriores = await new Promise((resolve, reject) => {
+        db.all(
+            `SELECT
+                c.id AS compra_id,
+                c.data_compra,
+                c.valor_total,
+                c.status_compra
+            FROM compras c
+            WHERE c.cliente_id = ? AND c.id != ?
+            ORDER BY c.data_compra DESC`,
+            [clienteId, compraId],
+            (err, rows) => {
+                if (err) return reject(err);
+                resolve(rows);
+            }
+        );
+    });
+
+    // Buscar itens de cada compra anterior
+    const historico = [];
+    for (const compraAnt of comprasAnteriores) {
+        const itens = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT
+                    ic.quantidade,
+                    ic.preco_unitario_no_momento_da_compra,
+                    p.id AS produto_id,
+                    p.nome AS produto_nome,
+                    p.imagem
+                FROM itens_compra ic
+                JOIN produtos p ON ic.produto_id = p.id
+                WHERE ic.compra_id = ?`,
+                [compraAnt.compra_id],
+                (err, rows) => {
+                    if (err) return reject(err);
+                    resolve(rows);
+                }
+            );
+        });
+
+        historico.push({
+            id: compraAnt.compra_id,
+            data_compra: compraAnt.data_compra,
+            valor_total: compraAnt.valor_total,
+            status_compra: compraAnt.status_compra,
+            itens: itens.map(item => ({
+                produto: {
+                    id: item.produto_id,
+                    nome: item.produto_nome,
+                    imagem: item.imagem
+                },
+                quantidade: item.quantidade,
+                subtotal_item: item.quantidade * item.preco_unitario_no_momento_da_compra
+            }))
+        });
+    }
+
+    return {
+        compra_atual: compra,
+        compras_anteriores: historico
+    };
+}
+
 async function getFormattedCompraDetails(db, compraId) {
+
+    
         // 1. Buscar detalhes da compra, cliente e endereço de entrega
         const compra = await new Promise((resolve, reject) => {
             db.get(
@@ -120,8 +192,8 @@ async function getFormattedCompraDetails(db, compraId) {
                 numero: compra.endereco_numero,
                 complemento: compra.endereco_complemento,
                 bairro: compra.endereco_bairro,
-                cidade: compra.cidade,
-                estado: compra.estado,
+                cidade: compra.endereco_cidade,
+                estado: compra.endereco_estado,
                 referencia: compra.endereco_referencia
             },
             itens: itensCompra.map(item => ({
@@ -143,6 +215,7 @@ async function getFormattedCompraDetails(db, compraId) {
 
 module.exports = {
   formatarClienteComEndereco,
-  getFormattedCompraDetails
+  getFormattedCompraDetails,
+  getCompraDetalhadaComHistorico
   
 };

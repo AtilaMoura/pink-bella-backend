@@ -183,6 +183,17 @@ async function adicionarEnviosAoCarrinho(purchaseId) {
     let packageWidth = purchase.package_width || 0;
     let packageLength = purchase.package_length || 0;
 
+    const loja = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM configuracoes_loja LIMIT 1', [], (err, row) => {
+        if (err) return reject(err);
+        resolve(row);
+      });
+    });
+
+    if (!loja) {
+      throw new Error('Configurações da loja não encontradas. Cadastre os dados em Configurações.');
+    }
+
     const productsForMelhorEnvio = productsInPurchase.map(item => {
       if (!purchase.package_weight) {
         totalWeight += (item.item_weight || 0) * item.quantity;
@@ -201,19 +212,19 @@ async function adicionarEnviosAoCarrinho(purchaseId) {
     // Monta o objeto de envio (único), e envia como array
     const orderMelhorEnvio = {
       from: {
-        name: "Pink Bella",
-        phone: "+5511978445381",
-        email: "utilefacil.123@gmail.com",
-        document: "43740234881",
-        address: "Rua Cândido Rodrigues",
-        state_register: "SP",
-        number: "21",
-        district: "Jardim Vila Formosa",
-        city: "São Paulo",
-        country_id: "BR",
-        postal_code: "03472090",
-        state_abbr: "SP",
-        complement: "bloco A Ap 4"
+        name: loja.nome,
+        phone: loja.telefone,
+        email: loja.email,
+        document: loja.documento,
+        address: loja.logradouro,
+        state_register: loja.estado_sigla,
+        number: loja.numero,
+        district: loja.bairro,
+        city: loja.cidade,
+        country_id: loja.pais_id || 'BR',
+        postal_code: loja.cep,
+        state_abbr: loja.estado_sigla,
+        complement: loja.complemento || ''
       },
       to: {
         name: purchase.destinatario_name,
@@ -268,8 +279,7 @@ async function adicionarEnviosAoCarrinho(purchaseId) {
     const codigo_envio = response.data.protocol;
     const codigo_etiqueta = response.data.id
 
-    console.log(price, codigo_envio, +"dado completo ---> "+response.data)
-await new Promise((resolve, reject) => { 
+    await new Promise((resolve, reject) => { 
   db.run(
     'UPDATE compras SET valor_frete = ?, codigo_envio = ?, codigo_etiqueta =? WHERE id = ?',
     [parseFloat(price), codigo_envio, codigo_etiqueta, purchaseId],
@@ -312,7 +322,6 @@ async function verificarStatusCompra(compraId, status) {
 
     switch (status) {
       case 'Pago':
-        console.log('entrei no Pago!')
         // Chamar a função para adicionar ao carrinho do Melhor Envio
         await adicionarEnviosAoCarrinho(compraId);
         await comprasService.atualizarStatusCompra(compraId, 'Pagar Etiqueta');
@@ -330,16 +339,13 @@ async function verificarStatusCompra(compraId, status) {
           await comprasService.atualizarStatusCompra(compraId, 'Pago (Aguardando Etiqueta)'); 
           break;
       case 'released':
-          console.log('entrei no released!')
-          await comprasService.atualizarStatusCompra(compraId, 'Etiqueta PDF Gerada'); 
+          await comprasService.atualizarStatusCompra(compraId, 'Etiqueta PDF Gerada');
           break;
       case 'generated':
-          console.log('entrei no generated!')
-          await comprasService.atualizarStatusCompra(compraId, 'Etiqueta PDF Gerada'); 
+          await comprasService.atualizarStatusCompra(compraId, 'Etiqueta PDF Gerada');
           break;
       case 'pending':
-          console.log('entrei no pending!')
-          await comprasService.atualizarStatusCompra(compraId, 'Etiqueta PDF Gerada'); 
+          await comprasService.atualizarStatusCompra(compraId, 'Pagar Etiqueta'); 
           break;
       case 'received':
           await comprasService.atualizarStatusCompra(compraId, 'Processado'); 
@@ -358,7 +364,7 @@ async function verificarStatusCompra(compraId, status) {
           break;
       // Adicionar mais casos para outros status
       default:
-        console.log(`Status ${status} não tem ação definida.`);
+        break;
     }
   } catch (error) {
     console.error('Erro ao verificar status da compra:', error.message);
@@ -403,7 +409,6 @@ async function getTotalValorCarrinho() {
 
 async function getBalance() {
   try {
-    console.log('Consultando saldo da conta no Melhor Envio...');
     const response = await axios.get(`${MELHOR_ENVIO_URL}/me/balance`, {
       headers: {
         'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
@@ -422,8 +427,6 @@ async function getBalance() {
 
 async function gerarCodigoPix(valorReais) {
   try {
-    console.log(`Gerando código PIX para R$${valorReais}...`);
-
     const payload = {
       value: valorReais.toFixed(2),          // valor como string, ex: "10.50"
       gateway: 'yapay-transparente',          // gateway correto
@@ -514,9 +517,8 @@ async function gerarPixComValorDoCarrinho() {
 
 async function comprarEtiquetas(listaDeIds) {
   try {
-    carrinho = await getTotalValorCarrinho()
-    labelIds = carrinho.ids
-    console.log(labelIds)
+    const carrinho = await getTotalValorCarrinho()
+    const labelIds = carrinho.ids
 
     const response = await axios.post(
       `${MELHOR_ENVIO_URL}/me/shipment/checkout`,
@@ -635,8 +637,6 @@ async function imprimirEtiquetas(orders, mode = 'private') {
     orders.forEach(compraId => {
       salvarUrlMelhorEnvio(compraId, response.data.url);
     });
-    
-    console.log(response.data.url)
 
     return response.data;
   } catch (error) {
@@ -646,7 +646,6 @@ async function imprimirEtiquetas(orders, mode = 'private') {
 }
 
 async function salvarUrlMelhorEnvio(compraId, url) {
-  console.log("codigo_etiqueta =", compraId, "url =", url)
   try {
     const compra = await new Promise((resolve, reject) => {
       db.get(
@@ -727,7 +726,6 @@ const rastrearEnvios = async (orders) => {
 };
 
 async function atualizarCodigoRastreio(compraId, codigoRastreioBruto) {
-  console.log(compraId, codigoRastreioBruto)
   try {
     // Busca o código atual e a transportadora
     const dadosCompra = await new Promise((resolve, reject) => {
@@ -739,9 +737,7 @@ async function atualizarCodigoRastreio(compraId, codigoRastreioBruto) {
 
     if (!dadosCompra) throw new Error('Compra não encontrada.');
 
-    // Se já existe um código, não atualiza
     if (dadosCompra.codigo_rastreio) {
-      console.log(`Compra ${compraId} já possui código de rastreio.`);
       return;
     }
 
@@ -758,8 +754,6 @@ async function atualizarCodigoRastreio(compraId, codigoRastreioBruto) {
         }
       );
     });
-
-    console.log(`Código de rastreio atualizado para a compra ${compraId}: ${urlRastreio}`);
   } catch (error) {
     console.error(`Erro ao atualizar código de rastreio da compra ${compraId}:`, error.message);
     throw error;
@@ -768,12 +762,9 @@ async function atualizarCodigoRastreio(compraId, codigoRastreioBruto) {
 
 async function atualizarStatusComprasMelhorEnvio() {
   try {
-    const compras = await comprasService.buscarComprasComEtiquetaPendente(); // Passo 2: já existe
-
-    console.log(compras)
+    const compras = await comprasService.buscarComprasComEtiquetaPendente();
 
     if (compras.length === 0) {
-      console.log('Nenhuma compra pendente de rastreamento.');
       return;
     }
 
@@ -796,8 +787,6 @@ async function atualizarStatusComprasMelhorEnvio() {
       // Atualiza o status usando o método que já trata os casos
       await verificarStatusCompra(compra.id, statusMelhorEnvio);
     }
-
-    console.log('Atualização de status concluída.');
 
   } catch (error) {
     console.error('Erro ao atualizar status das compras:', error.message);

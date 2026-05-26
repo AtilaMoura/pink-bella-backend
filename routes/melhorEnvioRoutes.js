@@ -7,22 +7,17 @@ const melhorEnvioService = require('../services/melhorEnvioService');
 router.post('/adicionar-ao-carrinho', async (req, res) => {
   const { purchaseIds } = req.body;
 
-  console.log('Requisição recebida para /adicionar-ao-carrinho. purchaseIds:', purchaseIds);
-
   if (!purchaseIds || !Array.isArray(purchaseIds) || purchaseIds.length === 0) {
-    return res.status(400).json({ message: "É necessário fornecer IDs de compra válidos." });
+    return res.status(400).json({ error: "É necessário fornecer IDs de compra válidos." });
   }
 
   const results = []; // Para armazenar as respostas de cada envio
   const errors = []; // Para armazenar erros específicos de cada envio
 
   for (const purchaseId of purchaseIds) {
-    console.log(`--- Processando compra ID: ${purchaseId} ---`);
     try {
-      // Chama o serviço para adicionar um ÚNICO envio ao carrinho
       const result = await melhorEnvioService.adicionarEnviosAoCarrinho(purchaseId);
       results.push({ purchaseId, status: 'success', data: result });
-      console.log(`Compra ${purchaseId} adicionada ao carrinho com sucesso.`);
     } catch (error) {
       console.error(`Erro ao adicionar compra ${purchaseId} ao carrinho:`, error.message);
       let errorDetails = error.message;
@@ -81,7 +76,7 @@ router.post('/pix', async (req, res) => {
   }
 });
 
-router.get('/pix-valor-carinhoo', async (req, res) => {
+router.get('/pix-valor-carrinho', async (req, res) => {
   try {
     const pixData = await melhorEnvioService.gerarPixComValorDoCarrinho();
     res.json(pixData);
@@ -152,7 +147,6 @@ router.post('/imprimir-etiquetas-pdf', async (req, res) => {
 
 router.post('/imprimir-etiquetas', async (req, res) => {
   const { orders, mode } = req.body;
-  console.log(orders+" - "+mode)
   try {
     const result = await melhorEnvioService.imprimirEtiquetas(orders, mode);
     res.json(result);
@@ -169,7 +163,7 @@ router.get('/etiquetas', async (req, res) => {
     res.json(etiquetas);
   } catch (error) {
     console.error('Erro ao listar etiquetas:', error.message);
-    res.status(500).json({ message: 'Erro ao listar etiquetas.' });
+    res.status(500).json({ error: 'Erro ao listar etiquetas.' });
   }
 });
 
@@ -180,18 +174,17 @@ router.post('/rastrear-envios', async (req, res) => {
     res.json(resultado);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Erro ao rastrear envios' });
+    res.status(500).json({ error: 'Erro ao rastrear envios' });
   }
 });
 
 router.get('/rastreios/atualizar', async (req, res) => {
   try {
-    console.log('entrei no /rastreios/atualizar!')
     const resultado = await melhorEnvioService.atualizarStatusComprasMelhorEnvio();
-    res.json({ sucesso: true, resultado });
+    res.json({ resultado });
   } catch (error) {
     console.error('Erro ao atualizar rastreios:', error.message);
-    res.status(500).json({ erro: 'Erro ao atualizar rastreios.' });
+    res.status(500).json({ error: 'Erro ao atualizar rastreios.' });
   }
     });
 

@@ -11,7 +11,7 @@ async function lookupAddressByCep(cep) {
 
     // Verifica se o CEP tem 8 dígitos após a limpeza
     if (cleanedCep.length !== 8) {
-        console.log(`CEP inválido detectado: ${cep}`);
+        console.warn(`CEP inválido detectado: ${cep}`);
         return null; // Retorna nulo se o CEP não for válido
     }
 
@@ -22,7 +22,7 @@ async function lookupAddressByCep(cep) {
 
         // O ViaCEP retorna { "erro": true } se o CEP não for encontrado
         if (dadosEndereco.erro) {
-            console.log(`CEP não encontrado pelo ViaCEP: ${cleanedCep}`);
+            console.warn(`CEP não encontrado pelo ViaCEP: ${cleanedCep}`);
             return null;
         }
 

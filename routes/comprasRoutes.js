@@ -3,7 +3,9 @@
     const db = require('../database');
     const { calcularFrete } = require('../services/melhorEnvioService'); // Para calcular o frete
     const melhorEnvioService = require('../services/melhorEnvioService');
-    const { getFormattedCompraDetails } = require('../utils/formatadores')
+    const { getFormattedCompraDetails,
+            getCompraDetalhadaComHistorico
+     } = require('../utils/formatadores')
     const comprasService = require('../services/comprasService'); // Certifique-se de importar
 
   
@@ -18,7 +20,7 @@ router.get('/', async (req, res) => {
 });
 
     router.post('/', async (req, res) => {
-        const { cliente_id, endereco_entrega_id, itens } = req.body;
+        const { cliente_id, endereco_entrega_id, itens, frete_selecionado } = req.body;
 
         // --- 1. Validação dos Dados de Entrada ---
         if (!cliente_id || !itens || !Array.isArray(itens) || itens.length === 0) {
@@ -94,25 +96,40 @@ router.get('/', async (req, res) => {
 
             produtosCompradosDetalhes = await Promise.all(produtosPromises);
 
-            // --- 5. Calcular e Selecionar o Frete Mais Barato ---
-            // **CORREÇÃO AQUI:** Desestruturando o retorno de calcularFrete
-            const opcoesFrete = await calcularFrete(enderecoEntrega.cep, quantidadeTotalDeItens);
+            // --- 5. Selecionar Frete ---
+            let freteEscolhido;
+            let pacoteFinalParaDb;
 
-            if (!opcoesFrete || opcoesFrete.length === 0) {
-                return res.status(400).json({ error: 'Não foi possível calcular o frete para este destino com os produtos selecionados.' });
-            }
+            if (frete_selecionado) {
+                // Frete pré-selecionado pelo usuário na tela
+                const pesoG = 500 + 250 * Math.max(quantidadeTotalDeItens - 1, 0);
+                const alturaC = 8 + 2 * Math.max(quantidadeTotalDeItens - 1, 0);
+                freteEscolhido = {
+                    price: frete_selecionado.preco_frete,
+                    company: { name: frete_selecionado.nome_transportadora },
+                    name: frete_selecionado.servico,
+                    delivery_time: frete_selecionado.prazo_dias_uteis,
+                    id: frete_selecionado.id_servico,
+                };
+                pacoteFinalParaDb = {
+                    weight: Math.max(pesoG / 1000, 0.1),
+                    height: Math.max(alturaC, 2),
+                    width: 25,
+                    length: 25,
+                };
+            } else {
+                // Auto-seleciona o frete mais barato
+                const opcoesFrete = await calcularFrete(enderecoEntrega.cep, quantidadeTotalDeItens);
 
-            // Automaticamente seleciona a opção mais barata
-            const freteEscolhido = opcoesFrete.sort((a, b) => a.price - b.price)[0];
+                if (!opcoesFrete || opcoesFrete.length === 0) {
+                    return res.status(400).json({ error: 'Não foi possível calcular o frete para este destino com os produtos selecionados.' });
+                }
 
-            const pacoteFinalParaDb = freteEscolhido.pacote_utilizado;
-            if (!pacoteFinalParaDb) {
-                console.error('Erro: Dados do pacote final não encontrados na opção de frete escolhida.');
-                return res.status(500).json({ error: 'Erro interno ao processar detalhes do frete.' });
-            }
-
-            if (!freteEscolhido) {
-                return res.status(500).json({ error: 'Erro ao selecionar a melhor opção de frete.' });
+                freteEscolhido = opcoesFrete.sort((a, b) => a.price - b.price)[0];
+                pacoteFinalParaDb = freteEscolhido.pacote_utilizado;
+                if (!pacoteFinalParaDb) {
+                    return res.status(500).json({ error: 'Erro interno ao processar detalhes do frete.' });
+                }
             }
 
             // Calculando o valor total dos produtos
@@ -258,11 +275,13 @@ router.get('/', async (req, res) => {
         try {
             const compraFormatada = await getFormattedCompraDetails(db, id);
 
+            const historico = await getCompraDetalhadaComHistorico(db, id)
+
             if (!compraFormatada) {
                 return res.status(404).json({ error: 'Compra não encontrada.' });
             }
 
-            res.json(compraFormatada);
+            res.json(historico);
 
         } catch (error) {
             console.error(`Erro ao buscar detalhes da compra ${id}:`, error.message);
@@ -273,8 +292,6 @@ router.get('/', async (req, res) => {
     router.put('/:id/status', async (req, res) => {
         const compraId = req.params.id;
         const { status } = req.body;
-
-        console.log('entrei no /:id/status!')
 
         try {
             //const pedidoAtualizado = await updateOrderStatus(compraId, status); verificarStatusCompra
@@ -290,14 +307,13 @@ router.get('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const novosDados = req.body;
-  console.log("🔍 JSON recebido no PUT /compras/:id:", novosDados);
 
   try {
     const resultado = await comprasService.editarCompra(id, novosDados);
-    res.json({ sucesso: true, dados: resultado });
+    res.json(resultado);
   } catch (erro) {
     console.error(erro);
-    res.status(500).json({ sucesso: false, erro: 'Erro ao editar compra.' });
+    res.status(500).json({ error: 'Erro ao editar compra.' });
   }
 });
     

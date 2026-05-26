@@ -20,7 +20,6 @@ const {
 router.post('/', async (req, res) => {
   try {
     const resultado = await cadastrarClienteComEndereco(req.body);
-    console.log(resultado)
     res.status(201).json({
       message: 'Cliente e endereço cadastrados com sucesso!',
       cliente: resultado,
@@ -39,8 +38,6 @@ router.post('/', async (req, res) => {
  */
 router.post('/lista', async (req, res) => {
   const clientes = req.body;
-
-  console.log(req.body.clientes)
 
   if (!Array.isArray(clientes) || clientes.length === 0) {
     return res.status(400).json({ error: 'Envie uma lista válida de clientes.' });

@@ -3,7 +3,9 @@ const path = require('path');
 require('dotenv').config();
 
 // Define o caminho para o arquivo do banco de dados
-const dbPath = path.resolve(__dirname, process.env.DB_PATH);
+// ':memory:' é tratado diretamente pelo SQLite (não é um arquivo)
+const rawDbPath = process.env.DB_PATH;
+const dbPath = rawDbPath === ':memory:' ? ':memory:' : path.resolve(__dirname, rawDbPath);
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Erro ao abrir o banco de dados:', err.message);
@@ -41,11 +43,20 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     comprimento REAL,
                     estoque INTEGER NOT NULL,
                     descricao TEXT,
-                    imagem TEXT
+                    imagem TEXT,
+                    ativo INTEGER DEFAULT 1
                 )
             `, (err) => {
                 if (err) console.error('Erro ao criar tabela produtos:', err.message);
-                else console.log('Tabela produtos verificada/criada.');
+                else {
+                    console.log('Tabela produtos verificada/criada.');
+                    // Migração: adiciona coluna ativo se ainda não existir (bancos antigos)
+                    db.run(`ALTER TABLE produtos ADD COLUMN ativo INTEGER DEFAULT 1`, (alterErr) => {
+                        if (alterErr && !alterErr.message.includes('duplicate column')) {
+                            console.error('Erro ao adicionar coluna ativo em produtos:', alterErr.message);
+                        }
+                    });
+                }
             });
 
             // 2. Cria a tabela 'enderecos'
@@ -121,12 +132,12 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 else console.log('Tabela compras verificada/criada.');
             });
 
-            db.run(`
-  ALTER TABLE compras ADD COLUMN url_melhor_envio TEXT;
-`, (err) => {
-  if (err) console.error('Erro ao adicionar coluna url_melhor_envio:', err.message);
-  else console.log('Coluna url_melhor_envio adicionada com sucesso!');
-});
+//            db.run(`
+//  ALTER TABLE compras ADD COLUMN url_melhor_envio TEXT;
+//`, (err) => {
+//  if (err) console.error('Erro ao adicionar coluna url_melhor_envio:', err.message);
+//  else console.log('Coluna url_melhor_envio adicionada com sucesso!');
+//});
 
             
 
@@ -205,6 +216,20 @@ const db = new sqlite3.Database(dbPath, (err) => {
         });
     }
 });
+
+            db.run(`
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT NOT NULL UNIQUE,
+                    senha_hash TEXT NOT NULL,
+                    nome TEXT NOT NULL,
+                    ativo INTEGER DEFAULT 1,
+                    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            `, (err) => {
+                if (err) console.error('Erro ao criar tabela usuarios:', err.message);
+                else console.log('Tabela usuarios verificada/criada.');
+            });
 
             // Mensagem final após todas as tentativas de criação
             console.log('Todas as tabelas foram processadas.');

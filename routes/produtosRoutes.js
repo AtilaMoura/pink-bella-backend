@@ -36,9 +36,9 @@ router.post('/', upload.single('imagemProduto'), (req, res) => { // Repare que a
     });
 });
 
-// 2. GET /produtos - Listar todos os produtos
-router.get('/', (req, res) => { // Repare que a rota é só '/' aqui
-    const sql = `SELECT * FROM produtos`;
+// 2. GET /produtos - Listar todos os produtos (apenas ativos)
+router.get('/', (req, res) => {
+    const sql = `SELECT * FROM produtos WHERE ativo = 1`;
     db.all(sql, [], (err, rows) => {
         if (err) {
             console.error('Erro ao buscar produtos:', err.message);
@@ -49,9 +49,9 @@ router.get('/', (req, res) => { // Repare que a rota é só '/' aqui
 });
 
 // 3. GET /produtos/:id - Obter detalhes de um produto específico por ID
-router.get('/:id', (req, res) => { // Repare que a rota é só '/:id' aqui
+router.get('/:id', (req, res) => {
     const { id } = req.params;
-    const sql = `SELECT * FROM produtos WHERE id = ?`;
+    const sql = `SELECT * FROM produtos WHERE id = ? AND ativo = 1`;
     db.get(sql, [id], (err, row) => {
         if (err) {
             console.error('Erro ao buscar produto por ID:', err.message);
@@ -87,19 +87,19 @@ router.put('/:id', upload.single('imagemProduto'), (req, res) => { // Repare que
     });
 });
 
-// 5. DELETE /produtos/:id - Deletar um produto
-router.delete('/:id', (req, res) => { // Repare que a rota é só '/:id' aqui
+// 5. DELETE /produtos/:id - Soft delete (marca como inativo)
+router.delete('/:id', (req, res) => {
     const { id } = req.params;
-    const sql = `DELETE FROM produtos WHERE id = ?`;
+    const sql = `UPDATE produtos SET ativo = 0 WHERE id = ? AND ativo = 1`;
     db.run(sql, [id], function(err) {
         if (err) {
-            console.error('Erro ao deletar produto:', err.message);
-            return res.status(500).json({ error: 'Erro interno ao deletar o produto.' });
+            console.error('Erro ao desativar produto:', err.message);
+            return res.status(500).json({ error: 'Erro interno ao desativar o produto.' });
         }
         if (this.changes === 0) {
             return res.status(404).json({ error: 'Produto não encontrado.' });
         }
-        res.json({ message: 'Produto deletado com sucesso!' });
+        res.json({ message: 'Produto removido com sucesso!' });
     });
 });
 

@@ -149,6 +149,7 @@ async function buscarClientePorId(id) {
       [id],
       (err, row) => {
         if (err) return reject(err);
+        if (!row) return resolve(null);
 
         const clienteFormatado = formatarClienteComEndereco(row);
         resolve(clienteFormatado);
@@ -195,8 +196,6 @@ async function listarTodosClientes() {
 
 async function atualizarClienteComEndereco(id, dadosAtualizacao) {
   const { nome, email, telefone, cpf, endereco } = dadosAtualizacao;
-
-  console.log(endereco);
 
   if (!nome && !email && !telefone && !cpf && !endereco) {
     throw new Error('Nenhum dado para atualizar fornecido.');
