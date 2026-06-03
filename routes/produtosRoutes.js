@@ -1,29 +1,31 @@
 const express = require('express');
-const router = express.Router(); // Cria um roteador Express
+const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const db = require('../database'); // Importa a conexão com o banco de dados
+const db = require('../database');
+const { uploadImagem, deletarImagem } = require('../utils/supabaseStorage');
 
-// --- Configuração do Multer (repetida aqui para modularidade, mas idealmente seria um middleware separado) ---
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
-    }
-});
-const upload = multer({ storage: storage });
-// --- Fim da configuração do Multer ---
-
+// Multer usa memória — imagem vai para o Supabase, não para o disco
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 // 1. POST /produtos - Cadastrar um novo produto (com upload de imagem)
-router.post('/', upload.single('imagemProduto'), (req, res) => { // Repare que a rota é só '/' aqui
+router.post('/', upload.single('imagemProduto'), async (req, res) => {
     const { nome, preco, peso, altura, largura, comprimento, estoque } = req.body;
-    const imagem = req.file ? `/uploads/${req.file.filename}` : null;
 
     if (!nome || !preco || !estoque) {
         return res.status(400).json({ error: 'Nome, preço e estoque são campos obrigatórios.' });
+    }
+
+    let imagem = null;
+    if (req.file) {
+        try {
+            const ext = path.extname(req.file.originalname) || '.jpg';
+            const nomeArquivo = `produto-${Date.now()}${ext}`;
+            imagem = await uploadImagem(req.file.buffer, req.file.mimetype, nomeArquivo);
+        } catch (err) {
+            console.error('Erro no upload da imagem:', err.message);
+            return res.status(500).json({ error: 'Erro ao fazer upload da imagem.' });
+        }
     }
 
     const sql = `INSERT INTO produtos (nome, preco, peso, altura, largura, comprimento, estoque, imagem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
@@ -65,13 +67,26 @@ router.get('/:id', (req, res) => {
 });
 
 // 4. PUT /produtos/:id - Atualizar um produto existente (com ou sem nova imagem)
-router.put('/:id', upload.single('imagemProduto'), (req, res) => { // Repare que a rota é só '/:id' aqui
+router.put('/:id', upload.single('imagemProduto'), async (req, res) => {
     const { id } = req.params;
     const { nome, preco, peso, altura, largura, comprimento, estoque } = req.body;
-    let imagem = req.file ? `/uploads/${req.file.filename}` : req.body.imagem;
 
     if (!nome || !preco || !estoque) {
         return res.status(400).json({ error: 'Nome, preço e estoque são campos obrigatórios para atualização.' });
+    }
+
+    let imagem = req.body.imagem || null;
+    if (req.file) {
+        try {
+            // Apaga imagem antiga se estava no Supabase
+            if (imagem && imagem.includes('supabase')) await deletarImagem(imagem);
+            const ext = path.extname(req.file.originalname) || '.jpg';
+            const nomeArquivo = `produto-${Date.now()}${ext}`;
+            imagem = await uploadImagem(req.file.buffer, req.file.mimetype, nomeArquivo);
+        } catch (err) {
+            console.error('Erro no upload da imagem:', err.message);
+            return res.status(500).json({ error: 'Erro ao fazer upload da imagem.' });
+        }
     }
 
     const sql = `UPDATE produtos SET nome = ?, preco = ?, peso = ?, altura = ?, largura = ?, comprimento = ?, estoque = ?, imagem = ? WHERE id = ?`;
