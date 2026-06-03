@@ -1,11 +1,10 @@
 const axios = require('axios');
-const db = require('../database'); 
+const db = require('../database');
 const fs = require('fs');
 const path = require('path');
-const comprasService = require('../services/comprasService'); 
-const melhorEnvioService = require('../services/melhorEnvioService');
+const comprasService = require('../services/comprasService');
+const melhorEnvioAuth = require('../services/melhorEnvioAuth');
 
-const MELHOR_ENVIO_TOKEN = process.env.MELHOR_ENVIO_TOKEN;
 const MELHOR_ENVIO_URL = process.env.MELHOR_ENVIO_URL;
 const CEP_ORIGEM_LOJA = process.env.CEP_ORIGEM_LOJA;
 const SEU_EMAIL_MELHOR_ENVIO = process.env.SEU_EMAIL_MELHOR_ENVIO;
@@ -25,16 +24,14 @@ const MEDIDAS_MINIMAS = {
  * @returns {Promise<Array>} - Retorna um array de opções de frete.
  * @param {Array<Object>} orders
  */
-async function calcularFrete(cepDestino, quantidadeTotalItens) { // <-- AGORA RECEBE APENAS quantidadeTotalItens
-    if (!MELHOR_ENVIO_TOKEN) {
-        throw new Error('MELHOR_ENVIO_TOKEN não configurado no .env');
-    }
+async function calcularFrete(cepDestino, quantidadeTotalItens) {
     if (!CEP_ORIGEM_LOJA || !SEU_EMAIL_MELHOR_ENVIO) {
         throw new Error('CEP de origem da loja ou e-mail do Melhor Envio não configurados no .env');
     }
     if (typeof quantidadeTotalItens !== 'number' || quantidadeTotalItens <= 0) {
         throw new Error('A quantidade total de itens é obrigatória e deve ser um número positivo para calcular o frete.');
     }
+    const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
 
     // --- Lógica para agregar peso e dimensões dos produtos com base na quantidadeTotalItens ---
     let pesoCalculado = 0;
@@ -267,6 +264,7 @@ async function adicionarEnviosAoCarrinho(purchaseId) {
       products: productsForMelhorEnvio
     };
 
+    const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
     const response = await axios.post(`${MELHOR_ENVIO_URL}/me/cart`, orderMelhorEnvio, {
       headers: {
         'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
@@ -374,6 +372,7 @@ async function verificarStatusCompra(compraId, status) {
 
 async function getTotalValorCarrinho() {
   try {
+    const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
     const response = await axios.get(`${MELHOR_ENVIO_URL}/me/cart`, {
       headers: {
         'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
@@ -409,6 +408,7 @@ async function getTotalValorCarrinho() {
 
 async function getBalance() {
   try {
+    const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
     const response = await axios.get(`${MELHOR_ENVIO_URL}/me/balance`, {
       headers: {
         'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
@@ -427,6 +427,7 @@ async function getBalance() {
 
 async function gerarCodigoPix(valorReais) {
   try {
+    const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
     const payload = {
       value: valorReais.toFixed(2),          // valor como string, ex: "10.50"
       gateway: 'yapay-transparente',          // gateway correto
@@ -520,7 +521,8 @@ async function comprarEtiquetas(listaDeIds) {
     const carrinho = await getTotalValorCarrinho()
     const labelIds = carrinho.ids
 
-    const response = await axios.post(
+    const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
+  const response = await axios.post(
       `${MELHOR_ENVIO_URL}/me/shipment/checkout`,
       {
         orders: labelIds
@@ -550,6 +552,7 @@ async function gerarEtiqueta(labelIds) {
     }
 
     try {
+        const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
         const response = await axios.post(
             `${MELHOR_ENVIO_URL}/me/shipment/generate`,
             { orders: labelIds },
@@ -582,6 +585,7 @@ async function imprimirEtiquetasPDF(orderIds) {
     const pdfBuffers = [];
 
     for (const orderId of orderIds) {
+      const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
       const response = await axios.get(
         `${MELHOR_ENVIO_URL}/me/imprimir/pdf/${orderId}`,
         {
@@ -621,6 +625,7 @@ async function salvarPdf(orderId, pdfBuffer) {
 
 async function imprimirEtiquetas(orders, mode = 'private') {
   try {
+    const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
     const response = await axios.post(
       `${MELHOR_ENVIO_URL}/me/shipment/print`,
       {
@@ -683,6 +688,7 @@ async function salvarUrlMelhorEnvio(compraId, url) {
 //Listar de etique ainda não esta funcionando
 async function listarEtiquetas(status = '', page = 1, limit = 10) {
     try {
+      const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
       const response = await axios.get(`${MELHOR_ENVIO_URL}/me/orders`, {
         headers: {
           Authorization: `Bearer ${MELHOR_ENVIO_TOKEN}`,
@@ -706,6 +712,7 @@ async function listarEtiquetas(status = '', page = 1, limit = 10) {
 
 
 const rastrearEnvios = async (orders) => {
+  const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
   const headers = {
     Authorization: `Bearer ${MELHOR_ENVIO_TOKEN}`,
     'User-Agent': `Nome da Aplicação (email@example.com)`,

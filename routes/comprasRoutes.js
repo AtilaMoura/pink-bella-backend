@@ -11,8 +11,14 @@
   
 router.get('/', async (req, res) => {
     try {
-        const todasCompras = await comprasService.getAllComprasFormatted();
-        res.json(todasCompras);
+        const page  = Math.max(1, parseInt(req.query.page)  || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+        const filtros = {
+            status: req.query.status || 'Todos',
+            search: req.query.search || '',
+        };
+        const resultado = await comprasService.getAllComprasFormatted(page, limit, filtros);
+        res.json(resultado);
     } catch (error) {
         console.error('Erro ao buscar todas as compras:', error.message);
         res.status(500).json({ error: 'Erro ao buscar a lista de compras.' });

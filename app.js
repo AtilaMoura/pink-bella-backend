@@ -7,25 +7,32 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./utils/swaggerConfig');
 const autenticar = require('./middleware/auth');
 const authRoutes = require('./routes/authRoutes');
+const melhorEnvioOAuthRoutes = require('./routes/melhorEnvioOAuthRoutes');
 const produtosRoutes = require('./routes/produtosRoutes');
 const clientesRoutes = require('./routes/clientesRoutes');
 const comprasRoutes = require('./routes/comprasRoutes');
 const freteRoutes = require('./routes/freteRoutes');
 const addressRoutes = require('./routes/addressRoutes');
 const melhorEnvioRoutes = require('./routes/melhorEnvioRoutes');
+const { initTokenTable } = require('./services/melhorEnvioAuth');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/', (req, res) => {
     res.send('Backend Pink Bella funcionando!');
 });
 
-// Rota pública — sem autenticação
+// Inicializa a tabela de tokens Melhor Envio
+initTokenTable();
+
+// Rotas públicas — sem autenticação
 app.use('/auth', authRoutes);
+app.use('/melhor-envio', melhorEnvioOAuthRoutes); // /auth e /callback públicos
 
 // Middleware de autenticação aplicado a todas as rotas de negócio
 app.use(autenticar);

@@ -7,9 +7,41 @@ const melhorEnvioService = require('../services/melhorEnvioService');
  * Realiza JOINs para incluir informações de clientes, endereços e itens de compra.
  * @returns {Promise<Array<object>>} Uma Promise que resolve para um array de objetos de compras formatadas.
  */
-async function getAllComprasFormatted() {
+async function getAllComprasFormatted(page = 1, limit = 20, filtros = {}) {
+    const offset = (page - 1) * limit;
+    const { status, search } = filtros;
 
-    // 1. Buscar todas as compras com JOINs para cliente e endereço
+    const conditions = [];
+    const params = [];
+
+    if (status && status !== 'Todos') {
+        conditions.push('c.status_compra = ?');
+        params.push(status);
+    }
+    if (search && search.trim() !== '') {
+        conditions.push('(cl.nome LIKE ? OR cl.cpf LIKE ? OR CAST(c.id AS TEXT) LIKE ?)');
+        const s = `%${search.trim()}%`;
+        params.push(s, s, s);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const total = await new Promise((resolve, reject) => {
+        db.get(
+            `SELECT COUNT(*) AS total FROM compras c
+             JOIN clientes cl ON c.cliente_id = cl.id
+             JOIN enderecos e ON c.endereco_entrega_id = e.id
+             ${where}`,
+            params,
+            (err, row) => { if (err) return reject(err); resolve(row.total); }
+        );
+    });
+
+    if (total === 0) {
+        return { compras: [], total: 0, page, limit, totalPages: 0 };
+    }
+
+    // 1. Buscar compras paginadas com JOINs para cliente e endereço
     const comprasRaw = await new Promise((resolve, reject) => {
         db.all(
             `SELECT
@@ -47,17 +79,16 @@ async function getAllComprasFormatted() {
             FROM compras c
             JOIN clientes cl ON c.cliente_id = cl.id
             JOIN enderecos e ON c.endereco_entrega_id = e.id
-            ORDER BY c.data_compra DESC`, // Ordena pelas compras mais recentes primeiro
+            ${where}
+            ORDER BY c.data_compra DESC
+            LIMIT ? OFFSET ?`,
+            [...params, limit, offset],
             (err, rows) => {
                 if (err) return reject(err);
                 resolve(rows);
             }
         );
     });
-
-    if (comprasRaw.length === 0) {
-        return []; // Retorna um array vazio se não houver compras
-    }
 
     // 2. Para cada compra encontrada, buscar seus itens separadamente
     // Usamos Promise.all para executar todas as buscas de itens em paralelo, otimizando o desempenho.
@@ -139,7 +170,13 @@ async function getAllComprasFormatted() {
         };
     }));
 
-    return todasComprasFormatadas;
+    return {
+        compras: todasComprasFormatadas,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+    };
 }
 
 async function atualizarStatusCompra(compraId, status) {
