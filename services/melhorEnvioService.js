@@ -24,7 +24,7 @@ const MEDIDAS_MINIMAS = {
  * @returns {Promise<Array>} - Retorna um array de opções de frete.
  * @param {Array<Object>} orders
  */
-async function calcularFrete(cepDestino, quantidadeTotalItens) {
+async function calcularFrete(cepDestino, quantidadeTotalItens, valorDeclarado = 0) {
     if (!CEP_ORIGEM_LOJA || !SEU_EMAIL_MELHOR_ENVIO) {
         throw new Error('CEP de origem da loja ou e-mail do Melhor Envio não configurados no .env');
     }
@@ -65,10 +65,12 @@ async function calcularFrete(cepDestino, quantidadeTotalItens) {
     const dadosFrete = {
         from: { postal_code: CEP_ORIGEM_LOJA },
         to: { postal_code: cepDestino },
-        volumes: [pacoteFinal], // Envia o pacote final calculado
+        volumes: [pacoteFinal],
         options: {
+            insurance_value: parseFloat(valorDeclarado) || 0,
             receipt: false,
-            own_hand: false
+            own_hand: false,
+            non_commercial: true,
         }
     };
 

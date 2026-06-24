@@ -352,7 +352,8 @@ router.get('/:id/cotar-frete', async (req, res) => {
     // Busca CEP do endereço de entrega e total de itens
     const row = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT e.cep, (SELECT SUM(ic.quantidade) FROM itens_compra ic WHERE ic.compra_id = c.id) AS total_itens
+        `SELECT e.cep, c.valor_produtos,
+                (SELECT SUM(ic.quantidade) FROM itens_compra ic WHERE ic.compra_id = c.id) AS total_itens
          FROM compras c
          JOIN enderecos e ON e.id = c.endereco_entrega_id
          WHERE c.id = ?`,
@@ -365,8 +366,9 @@ router.get('/:id/cotar-frete', async (req, res) => {
 
     const cep = (row.cep || '').replace(/\D/g, '');
     const totalItens = parseInt(row.total_itens) || 1;
+    const valorDeclarado = parseFloat(row.valor_produtos) || 0;
 
-    const opcoesBrutas = await calcularFrete(cep, totalItens);
+    const opcoesBrutas = await calcularFrete(cep, totalItens, valorDeclarado);
     const opcoes = opcoesBrutas
       .filter(o => o.price !== null && o.error === undefined)
       .map(o => ({
