@@ -171,6 +171,15 @@ router.post('/rastrear-envios', async (req, res) => {
   try {
     const orders = req.body.orders;
     const resultado = await melhorEnvioService.rastrearEnvios(orders);
+
+    // Salva codigo_rastreio no banco para cada envio que já tem código
+    for (const [labelId, dados] of Object.entries(resultado)) {
+      const codigoRastreio = dados.tracking || dados.melhorenvio_tracking;
+      if (codigoRastreio) {
+        await melhorEnvioService.salvarCodigoRastreioPorEtiqueta(labelId, codigoRastreio).catch(() => {});
+      }
+    }
+
     res.json(resultado);
   } catch (error) {
     console.error(error);

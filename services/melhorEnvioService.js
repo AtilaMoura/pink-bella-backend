@@ -934,6 +934,15 @@ async function limparCarrinhoObsoleto() {
   return { removidos, mantidos, totalAntes, totalDepois };
 }
 
+async function salvarCodigoRastreioPorEtiqueta(labelId, codigoRastreioBruto) {
+  return new Promise((resolve, reject) => {
+    db.get('SELECT id FROM compras WHERE codigo_etiqueta = ?', [labelId], (err, row) => {
+      if (err || !row) return resolve(); // ignora silenciosamente se não encontrar
+      atualizarCodigoRastreio(row.id, codigoRastreioBruto).then(resolve).catch(resolve);
+    });
+  });
+}
+
 module.exports = {
     calcularFrete,
     adicionarEnviosAoCarrinho,
@@ -949,6 +958,7 @@ module.exports = {
     imprimirEtiquetasPDF,
     listarEtiquetas,
     rastrearEnvios,
+    salvarCodigoRastreioPorEtiqueta,
     verificarStatusCompra,
     atualizarStatusComprasMelhorEnvio
 };
