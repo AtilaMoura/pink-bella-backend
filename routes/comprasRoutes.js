@@ -415,12 +415,17 @@ router.put('/:id/frete', async (req, res) => {
     // Se estava em "Pagar Etiqueta" (já no carrinho ME), volta para "Pago" para re-adicionar depois
     const novoStatus = compra.status_compra === 'Pagar Etiqueta' ? 'Pago' : compra.status_compra;
 
+    // Se estava em "Pagar Etiqueta", zera codigo_etiqueta e codigo_envio para que
+    // adicionarEnviosAoCarrinho não detecte a entrada antiga como válida
+    const limparEtiqueta = compra.status_compra === 'Pagar Etiqueta';
+
     await new Promise((resolve, reject) => {
       db.run(
         `UPDATE compras
          SET valor_frete = ?, transportadora = ?, servico_frete = ?,
              prazo_frete_dias = ?, melhor_envio_service_id = ?, valor_total = ?,
              status_compra = ?
+             ${limparEtiqueta ? ', codigo_etiqueta = NULL, codigo_envio = NULL' : ''}
          WHERE id = ?`,
         [preco_frete, nome_transportadora, servico, prazo_dias_uteis, id_servico, novoTotal, novoStatus, id],
         function(err) { if (err) return reject(err); resolve(); }
