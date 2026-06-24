@@ -915,14 +915,19 @@ async function limparCarrinhoObsoleto() {
 
   if (idsParaRemover.length > 0) {
     const MELHOR_ENVIO_TOKEN = await melhorEnvioAuth.getValidToken();
-    await axios.delete(`${MELHOR_ENVIO_URL}/me/cart`, {
-      headers: {
-        'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      data: { orders: idsParaRemover }
-    });
+    // A API ME exige DELETE individual por ID — o endpoint em batch retorna 405
+    for (const itemId of idsParaRemover) {
+      try {
+        await axios.delete(`${MELHOR_ENVIO_URL}/me/cart/${itemId}`, {
+          headers: {
+            'Authorization': `Bearer ${MELHOR_ENVIO_TOKEN}`,
+            'Accept': 'application/json'
+          }
+        });
+      } catch (e) {
+        console.warn(`Aviso: não foi possível remover item ${itemId} do carrinho ME: ${e.response?.status} ${e.message}`);
+      }
+    }
   }
 
   const totalDepois = mantidos.reduce((s, i) => s + i.price, 0);
